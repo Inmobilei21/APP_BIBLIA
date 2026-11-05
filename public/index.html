@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Santa Biblia</title>
+  <meta name="description" content="Santa Biblia Reina-Valera 1909 con comentarios por versículo">
+  <meta name="theme-color" content="#b08a2e">
+  <link rel="icon" href="/icons/cross.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="menuBtn" aria-label="Abrir índice" aria-controls="drawer" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div class="brand">
+      <img src="/icons/cross.svg" alt="" class="brand-icon">
+      <span>Santa Biblia</span>
+    </div>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <nav class="drawer" id="drawer" aria-label="Índice" aria-hidden="true">
+    <div class="drawer-head">
+      <img src="/icons/icon-192.png" alt="" class="drawer-logo">
+      <div>
+        <div class="drawer-title">Santa Biblia</div>
+        <div class="drawer-sub">Reina-Valera 1909</div>
+      </div>
+      <button class="icon-btn close" id="closeDrawer" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <section class="drawer-section">
+      <button class="section-toggle" aria-expanded="true" data-target="bibleNav">
+        <span class="num">I.</span> La Biblia <span class="chev"></span>
+      </button>
+      <div id="bibleNav" class="section-body">
+        <input type="search" id="bookFilter" class="filter" placeholder="Buscar libro…" autocomplete="off">
+        <div id="bookList"></div>
+      </div>
+    </section>
+
+    <section class="drawer-section">
+      <button class="section-toggle" aria-expanded="false" data-target="commentIndex">
+        <span class="num">II.</span> Índice de comentarios <span class="badge" id="commentTotal">0</span><span class="chev"></span>
+      </button>
+      <div id="commentIndex" class="section-body" hidden></div>
+    </section>
+  </nav>
+
+  <main id="reader">
+    <div class="chapter-nav">
+      <button class="nav-arrow" id="prevCh" aria-label="Capítulo anterior">‹</button>
+      <button class="chapter-title" id="chapterTitle" title="Elegir libro y capítulo"></button>
+      <button class="nav-arrow" id="nextCh" aria-label="Capítulo siguiente">›</button>
+    </div>
+    <div class="ornament" aria-hidden="true">✠</div>
+    <article id="verses" class="verses" aria-live="polite"></article>
+    <div class="chapter-foot">
+      <button class="btn ghost" id="prevCh2">‹ Anterior</button>
+      <button class="btn ghost" id="nextCh2">Siguiente ›</button>
+    </div>
+  </main>
+
+  <div id="printArea" class="print-area" aria-hidden="true"></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

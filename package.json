@@ -1,0 +1,16 @@
+{
+  "name": "app-biblia",
+  "version": "1.0.0",
+  "description": "Santa Biblia (Reina-Valera 1909) con comentarios por versículo",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "build:bible": "node scripts/build-bible.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}
