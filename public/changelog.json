@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "2.1",
+      "date": "2026-11-06",
+      "changes": [
+        "Al deslizar el dedo hacia la derecha ya solo se abre el menú lateral: cambiar de capítulo no deja historial, así que el navegador no arrastra la página hacia atrás."
+      ]
+    },
+    {
       "version": "2.0",
       "date": "2026-11-06",
       "changes": [

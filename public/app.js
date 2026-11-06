@@ -101,9 +101,12 @@
     if (!book || c < 1 || c > book.chapters) return null;
     return { b, c, v: m[3] ? +m[3] : null };
   }
+  // Cambia de capítulo sin crear historial: así Safari no tiene página «anterior»
+  // y su gesto de volver atrás (deslizar desde el borde) no arrastra la app.
   function go(b, c, v) {
     const h = `#/${b}/${c}${v ? '/' + v : ''}`;
-    if (location.hash === h) route(); else location.hash = h;
+    if (location.hash !== h) history.replaceState(null, '', h);
+    route();
   }
   function step(dir) {
     const i = state.books.findIndex(b => b.id === state.book);
