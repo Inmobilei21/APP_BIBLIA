@@ -4,7 +4,6 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
-const AUTHORS = ['MMF', 'LFD'];
 const app = express();
 app.use(express.json({ limit: '200kb' }));
 
@@ -24,6 +23,20 @@ function makeStore() {
           author TEXT NOT NULL, text TEXT NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ)`);
         await pool.query('CREATE INDEX IF NOT EXISTS comments_ref ON comments(book, chapter, verse)');
+        await pool.query(`CREATE TABLE IF NOT EXISTS posts (
+          id TEXT PRIMARY KEY, book INT NOT NULL, chapter INT NOT NULL, verse INT NOT NULL,
+          name TEXT NOT NULL, text TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+        await pool.query('CREATE INDEX IF NOT EXISTS posts_ref ON posts(book, chapter, verse)');
+      },
+      async listPosts() {
+        const { rows } = await pool.query('SELECT * FROM posts ORDER BY book, chapter, verse, created_at');
+        return rows.map(r => ({ id: r.id, book: r.book, chapter: r.chapter, verse: r.verse, name: r.name, text: r.text, createdAt: r.created_at }));
+      },
+      async createPost(p) {
+        const { rows: [r] } = await pool.query(
+          'INSERT INTO posts (id, book, chapter, verse, name, text) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+          [crypto.randomUUID(), p.book, p.chapter, p.verse, p.name, p.text]);
+        return { id: r.id, book: r.book, chapter: r.chapter, verse: r.verse, name: r.name, text: r.text, createdAt: r.created_at };
       },
       async list() {
         const { rows } = await pool.query('SELECT * FROM comments ORDER BY book, chapter, verse, created_at');
@@ -47,11 +60,21 @@ function makeStore() {
     };
   }
   const file = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'comments.json');
-  let items = [];
+  const postsFile = path.join(path.dirname(file), 'posts.json');
+  let items = [], posts = [];
   const save = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(items, null, 1)); };
+  const savePosts = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(postsFile, JSON.stringify(posts, null, 1)); };
   return {
     kind: 'archivo ' + file,
-    async init() { try { items = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { items = []; } },
+    async init() {
+      try { items = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { items = []; }
+      try { posts = JSON.parse(fs.readFileSync(postsFile, 'utf8')); } catch { posts = []; }
+    },
+    async listPosts() { return [...posts]; },
+    async createPost(p) {
+      const it = { id: crypto.randomUUID(), ...p, createdAt: new Date().toISOString() };
+      posts.push(it); savePosts(); return it;
+    },
     async list() {
       return [...items].sort((a, b) => a.book - b.book || a.chapter - b.chapter || a.verse - b.verse
         || a.createdAt.localeCompare(b.createdAt));
@@ -74,11 +97,10 @@ const store = makeStore();
 // ---------- Validación ----------
 const bibleIndex = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'data', 'index.json'), 'utf8'));
 function validate(body, partial) {
-  const author = String(body.author || '');
+  const author = String(body.author || '').trim().slice(0, 60);
   const text = String(body.text || '').trim();
-  if (!AUTHORS.includes(author)) return { error: 'Autor no válido' };
-  if (!text) return { error: 'El comentario está vacío' };
-  if (text.length > 20000) return { error: 'Comentario demasiado largo' };
+  if (!text) return { error: 'El texto está vacío' };
+  if (text.length > 20000) return { error: 'Texto demasiado largo' };
   if (partial) return { author, text };
   const book = Number(body.book), chapter = Number(body.chapter), verse = Number(body.verse);
   const b = bibleIndex.books[book - 1];
@@ -90,7 +112,13 @@ function validate(body, partial) {
 // ---------- API ----------
 const wrap = fn => (req, res) => fn(req, res).catch(e => { console.error(e); res.status(500).json({ error: 'Error del servidor' }); });
 app.get('/api/health', (req, res) => res.json({ ok: true, storage: store.kind.startsWith('archivo') ? 'file' : 'postgres' }));
-app.get('/api/authors', (req, res) => res.json(AUTHORS));
+app.get('/api/posts', wrap(async (req, res) => res.json(await store.listPosts())));
+app.post('/api/posts', wrap(async (req, res) => {
+  const v = validate(req.body, false); if (v.error) return res.status(400).json(v);
+  const name = String(req.body.name || '').trim().slice(0, 40);
+  if (!name) return res.status(400).json({ error: 'Escribe tu nombre' });
+  res.status(201).json(await store.createPost({ book: v.book, chapter: v.chapter, verse: v.verse, name, text: v.text }));
+}));
 app.get('/api/comments', wrap(async (req, res) => res.json(await store.list())));
 app.post('/api/comments', wrap(async (req, res) => {
   const v = validate(req.body, false); if (v.error) return res.status(400).json(v);

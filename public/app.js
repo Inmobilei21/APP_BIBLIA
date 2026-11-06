@@ -1,7 +1,6 @@
 (() => {
   'use strict';
 
-  const AUTHORS = ['MMF', 'LFD'];
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const store = {
@@ -9,9 +8,9 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* sin almacenamiento local */ } },
   };
   const ICON = {
-    comment: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M12 9v6M9 12h6"/></svg>',
+    comment: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
     share: '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>',
-    pdf: '<svg viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>',
+    forum: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   };
 
   const state = {
@@ -19,8 +18,11 @@
     cache: new Map(),       // id de libro -> capítulos (array de arrays de textos)
     comments: [],
     byRef: new Map(),       // "libro:cap:vers" -> [comentarios]
+    posts: [],
+    postsByRef: new Map(),  // "libro:cap:vers" -> [mensajes de discusión]
     book: 1, chapter: 1,
-    active: null,           // versículo con el panel abierto
+    active: null,           // versículo con las acciones abiertas
+    pendingOpen: null,      // { v, mode } para abrir tras navegar
   };
   const key = (b, c, v) => `${b}:${c}:${v}`;
   const bookOf = id => state.books[id - 1];
@@ -44,22 +46,23 @@
     }
     return state.cache.get(id);
   }
-  function indexComments() {
-    state.byRef.clear();
-    for (const c of state.comments) {
+  function group(list) {
+    const m = new Map();
+    for (const c of list) {
       const k = key(c.book, c.chapter, c.verse);
-      if (!state.byRef.has(k)) state.byRef.set(k, []);
-      state.byRef.get(k).push(c);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(c);
     }
+    return m;
   }
-  async function loadComments() {
-    try {
-      state.comments = await api('GET', '/api/comments');
-    } catch (e) {
-      toast('No se pudieron cargar los comentarios');
-      state.comments = [];
-    }
-    indexComments();
+  const indexComments = () => { state.byRef = group(state.comments); };
+  const indexPosts = () => { state.postsByRef = group(state.posts); };
+  async function loadAll() {
+    const [c, p] = await Promise.allSettled([api('GET', '/api/comments'), api('GET', '/api/posts')]);
+    state.comments = c.status === 'fulfilled' ? c.value : [];
+    state.posts = p.status === 'fulfilled' ? p.value : [];
+    if (c.status === 'rejected' || p.status === 'rejected') toast('No se pudieron cargar los comentarios');
+    indexComments(); indexPosts();
   }
 
   // ---------- Utilidades de interfaz ----------
@@ -68,7 +71,8 @@
     const t = $('#toast'); t.textContent = msg; t.hidden = false;
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
   }
-  const fmtDate = iso => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const fmtDate = iso => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const fmtText = t => esc(t);
 
   // ---------- Navegación ----------
   function parseHash() {
@@ -90,7 +94,8 @@
     go(b, c);
   }
   async function route() {
-    const r = parseHash() || store.get('last', { b: 1, c: 1 });
+    let r = parseHash() || store.get('last', { b: 1, c: 1 });
+    if (!bookOf(r.b) || r.c > bookOf(r.b).chapters.length) r = { b: 1, c: 1 };
     const changed = r.b !== state.book || r.c !== state.chapter || !$('#verses').children.length;
     state.book = r.b; state.chapter = r.c;
     store.set('last', { b: r.b, c: r.c });
@@ -100,7 +105,7 @@
       if (el) {
         el.scrollIntoView({ block: 'center', behavior: changed ? 'auto' : 'smooth' });
         el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
-        if (state.pendingOpen === r.v) openPanel(r.v);
+        if (state.pendingOpen && state.pendingOpen.v === r.v) openActions(r.v, state.pendingOpen.mode);
       }
     }
     state.pendingOpen = null;
@@ -122,104 +127,85 @@
     if (state.book !== b || state.chapter !== c) return; // el usuario ya navegó a otro sitio
     wrap.innerHTML = chapters[c - 1].map((t, i) => `
       <section class="verse" id="v${i + 1}" data-v="${i + 1}" tabindex="0" aria-label="Versículo ${i + 1}">
-        <span class="vnum">${i + 1}</span><span class="vtext">${esc(t)}</span>${dotHtml(b, c, i + 1)}
+        <span class="vnum">${i + 1}</span><span class="vtext">${esc(t)}</span>${extrasHtml(b, c, i + 1)}
       </section>`).join('');
   }
-  function dotHtml(b, c, v) {
-    const n = (state.byRef.get(key(b, c, v)) || []).length;
-    return n ? `<span class="dot" title="${n} comentario${n > 1 ? 's' : ''}">${n > 1 ? n : '!'}</span>` : '';
+  // Punto + comentario visible justo debajo del texto
+  function extrasHtml(b, c, v) {
+    const list = state.byRef.get(key(b, c, v)) || [];
+    if (!list.length) return '';
+    return `<span class="dot" title="Tiene comentario"></span>
+      <div class="vcomment">${list.map(cm => `<p>${fmtText(cm.text)}</p>`).join('')}</div>`;
   }
-  function refreshDot(v) {
+  function refreshVerse(v) {
     const el = document.getElementById(`v${v}`); if (!el) return;
-    el.querySelector('.dot')?.remove();
-    el.insertAdjacentHTML('beforeend', dotHtml(state.book, state.chapter, v));
+    el.querySelectorAll('.dot, .vcomment').forEach(x => x.remove());
+    const actions = el.querySelector('.vactions');
+    const tmp = document.createElement('div');
+    tmp.innerHTML = extrasHtml(state.book, state.chapter, v);
+    [...tmp.childNodes].forEach(n => actions ? el.insertBefore(n, actions) : el.appendChild(n));
   }
-  const verseText = v => bookOf(state.book) && state.cache.get(state.book)[state.chapter - 1][v - 1];
+  const verseText = v => state.cache.get(state.book)[state.chapter - 1][v - 1];
+  const commentOf = v => (state.byRef.get(key(state.book, state.chapter, v)) || [])[0];
 
-  function closePanel() {
+  function closeActions() {
     if (!state.active) return;
     const el = document.getElementById(`v${state.active}`);
     el?.classList.remove('active');
-    el?.querySelector('.panel')?.remove();
+    el?.querySelector('.vactions')?.remove();
     state.active = null;
   }
-  function openPanel(v, { form = false } = {}) {
-    closePanel();
+  // Acciones discretas debajo del versículo (y de su comentario, si lo hay)
+  function openActions(v, mode) {
+    closeActions();
     const el = document.getElementById(`v${v}`); if (!el) return;
     state.active = v;
     el.classList.add('active');
-    const list = state.byRef.get(key(state.book, state.chapter, v)) || [];
-    const panel = document.createElement('div');
-    panel.className = 'panel';
-    panel.innerHTML = `
+    const has = !!commentOf(v);
+    const n = (state.postsByRef.get(key(state.book, state.chapter, v)) || []).length;
+    const box = document.createElement('div');
+    box.className = 'vactions';
+    box.innerHTML = `
       <div class="actions">
-        <button class="btn primary" data-act="add">${ICON.comment} Añadir comentario</button>
-        <button class="btn" data-act="share">${ICON.share} Compartir</button>
-        <button class="btn" data-act="pdf">${ICON.pdf} Imprimir PDF</button>
+        <button class="act" data-act="comment">${ICON.comment}${has ? 'Editar' : 'Añadir comentario'}</button>
+        <button class="act" data-act="share">${ICON.share}Compartir</button>
+        <button class="act" data-act="forum">${ICON.forum}Discusión${n ? ` <span class="act-count">${n}</span>` : ''}</button>
       </div>
-      <div class="form-slot"></div>
-      ${list.length ? `<div class="comments">${list.map(commentHtml).join('')}</div>` : ''}`;
-    el.appendChild(panel);
-    if (form) showForm(panel);
+      <div class="slot"></div>`;
+    el.appendChild(box);
+    if (mode === 'comment') showCommentForm(box);
+    if (mode === 'forum') showForum(box, v);
   }
-  function commentHtml(c) {
-    return `<div class="comment" data-id="${c.id}">
-      <div class="comment-meta"><span class="author-tag ${esc(c.author)}">${esc(c.author)}</span>
-        <span>${fmtDate(c.createdAt)}</span>${c.updatedAt ? '<span>· editado</span>' : ''}</div>
-      <div class="comment-text">${esc(c.text)}</div>
-      <div class="comment-tools">
-        <button class="btn small ghost" data-act="edit">Editar</button>
-        <button class="btn small danger" data-act="del">Borrar</button>
-      </div>
-    </div>`;
-  }
-  function showForm(panel, editing) {
-    const slot = panel.querySelector('.form-slot');
-    let author = editing ? editing.author : store.get('author', null);
-    slot.innerHTML = `
+
+  function showCommentForm(box) {
+    const existing = commentOf(state.active);
+    box.querySelector('.slot').innerHTML = `
       <div class="form">
-        <label>¿Quién comenta?</label>
-        <div class="authors" role="group" aria-label="Autor">
-          ${AUTHORS.map(a => `<button type="button" class="author-opt" data-author="${a}" aria-pressed="${a === author}">${a}</button>`).join('')}
-        </div>
-        <label for="ctext">${editing ? 'Editar comentario' : 'Comentario'}</label>
-        <textarea id="ctext" placeholder="Escribe aquí tu comentario…">${editing ? esc(editing.text) : ''}</textarea>
+        <textarea class="ctext" placeholder="Escribe aquí tu comentario…" aria-label="Comentario">${existing ? esc(existing.text) : ''}</textarea>
         <div class="form-row">
+          ${existing ? '<button class="btn ghost danger" data-act="delete">Eliminar</button><span class="grow"></span>' : ''}
           <button class="btn ghost" data-act="cancel">Cancelar</button>
           <button class="btn primary" data-act="save">Guardar</button>
         </div>
       </div>`;
-    const form = slot.firstElementChild;
-    form.dataset.editId = editing ? editing.id : '';
-    form.querySelectorAll('.author-opt').forEach(b => b.addEventListener('click', () => {
-      author = b.dataset.author;
-      form.querySelectorAll('.author-opt').forEach(x => x.setAttribute('aria-pressed', x === b));
-    }));
-    form.getAuthor = () => author;
-    const ta = form.querySelector('textarea');
-    ta.focus();
-    ta.setSelectionRange(ta.value.length, ta.value.length);
+    const ta = box.querySelector('textarea');
+    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
   }
 
-  async function saveForm(panel) {
-    const form = panel.querySelector('.form');
-    const author = form.getAuthor();
-    const text = form.querySelector('textarea').value.trim();
-    if (!author) return toast('Elige quién hace el comentario (MMF o LFD)');
-    if (!text) return toast('Escribe un comentario');
+  async function saveComment(box) {
     const v = state.active;
-    const btn = form.querySelector('[data-act="save"]'); btn.disabled = true;
+    const text = box.querySelector('.ctext').value.trim();
+    const existing = commentOf(v);
+    if (!text) return existing ? deleteComment(box) : toast('Escribe un comentario');
+    const btn = box.querySelector('[data-act="save"]'); btn.disabled = true;
     try {
-      if (form.dataset.editId) {
-        const upd = await api('PUT', `/api/comments/${form.dataset.editId}`, { author, text });
+      if (existing) {
+        const upd = await api('PUT', `/api/comments/${existing.id}`, { text });
         state.comments = state.comments.map(c => c.id === upd.id ? upd : c);
       } else {
-        const c = await api('POST', '/api/comments', { book: state.book, chapter: state.chapter, verse: v, author, text });
-        state.comments.push(c);
+        state.comments.push(await api('POST', '/api/comments', { book: state.book, chapter: state.chapter, verse: v, text }));
       }
-      store.set('author', author);
-      indexComments(); refreshDot(v); renderCommentIndex();
-      openPanel(v);
+      indexComments(); refreshVerse(v); renderCommentIndex(); closeActions();
       toast('Comentario guardado');
     } catch (e) {
       btn.disabled = false;
@@ -227,15 +213,62 @@
     }
   }
 
-  async function deleteComment(id) {
-    if (!confirm('¿Borrar este comentario?')) return;
+  async function deleteComment() {
+    const v = state.active;
+    const list = state.byRef.get(key(state.book, state.chapter, v)) || [];
+    if (!list.length || !confirm('¿Eliminar el comentario de este versículo?')) return;
     try {
-      await api('DELETE', `/api/comments/${id}`);
-      state.comments = state.comments.filter(c => c.id !== id);
-      const v = state.active;
-      indexComments(); refreshDot(v); renderCommentIndex(); openPanel(v);
-      toast('Comentario borrado');
-    } catch (e) { toast('No se pudo borrar: ' + e.message); }
+      for (const c of list) await api('DELETE', `/api/comments/${c.id}`);
+      const ids = new Set(list.map(c => c.id));
+      state.comments = state.comments.filter(c => !ids.has(c.id));
+      indexComments(); refreshVerse(v); renderCommentIndex(); closeActions();
+      toast('Comentario eliminado');
+    } catch (e) { toast('No se pudo eliminar: ' + e.message); }
+  }
+
+  // ---------- Discusión (foro por versículo) ----------
+  function postsHtml(list) {
+    if (!list.length) return '<p class="empty">Todavía no hay mensajes. Empieza la discusión.</p>';
+    return list.map(p => `
+      <div class="post">
+        <div class="post-meta"><b>${esc(p.name)}</b><span>${fmtDate(p.createdAt)}</span></div>
+        <div class="post-text">${fmtText(p.text)}</div>
+      </div>`).join('');
+  }
+  function showForum(box, v) {
+    const list = state.postsByRef.get(key(state.book, state.chapter, v)) || [];
+    box.querySelector('.slot').innerHTML = `
+      <div class="forum">
+        <div class="forum-title">Discusión · ${esc(refLabel(state.book, state.chapter, v))}</div>
+        <div class="posts">${postsHtml(list)}</div>
+        <div class="form">
+          <input class="pname" type="text" maxlength="40" placeholder="Tu nombre" aria-label="Tu nombre" value="${esc(store.get('name', ''))}">
+          <textarea class="ptext" placeholder="Escribe tu mensaje…" aria-label="Mensaje"></textarea>
+          <div class="form-row">
+            <button class="btn ghost" data-act="cancel">Cerrar</button>
+            <button class="btn primary" data-act="post">Publicar</button>
+          </div>
+        </div>
+      </div>`;
+    const posts = box.querySelector('.posts'); posts.scrollTop = posts.scrollHeight;
+  }
+  async function publish(box) {
+    const v = state.active;
+    const name = box.querySelector('.pname').value.trim();
+    const text = box.querySelector('.ptext').value.trim();
+    if (!name) return toast('Escribe tu nombre');
+    if (!text) return toast('Escribe un mensaje');
+    const btn = box.querySelector('[data-act="post"]'); btn.disabled = true;
+    try {
+      state.posts.push(await api('POST', '/api/posts', { book: state.book, chapter: state.chapter, verse: v, name, text }));
+      store.set('name', name);
+      indexPosts(); renderForumIndex();
+      openActions(v, 'forum');
+      toast('Mensaje publicado');
+    } catch (e) {
+      btn.disabled = false;
+      toast('No se pudo publicar: ' + e.message);
+    }
   }
 
   async function share(v) {
@@ -252,53 +285,33 @@
     }
   }
 
-  function printVerse(v) {
-    const ref = refLabel(state.book, state.chapter, v);
-    const list = state.byRef.get(key(state.book, state.chapter, v)) || [];
-    $('#printArea').innerHTML = `
-      <div class="pa-head"><img src="/icons/icon-192.png" alt=""><div><h1>${esc(ref)}</h1><small>Santa Biblia · Reina-Valera 1909</small></div></div>
-      <p class="pa-text"><b>${v}</b> ${esc(verseText(v))}</p>
-      ${list.length ? `<div class="pa-comments"><h2>Comentarios</h2>${list.map(c => `
-        <div class="pa-comment"><div class="pa-meta"><b>${esc(c.author)}</b> · ${fmtDate(c.createdAt)}</div>
-        <div class="comment-text">${esc(c.text)}</div></div>`).join('')}</div>` : ''}
-      <div class="pa-foot">Impreso el ${fmtDate(new Date().toISOString())}</div>`;
-    const prevTitle = document.title;
-    document.title = ref.replace(/[:\s]+/g, '_');   // nombre sugerido del PDF
-    document.body.classList.add('print-verse');
-    const done = () => { document.body.classList.remove('print-verse'); document.title = prevTitle; window.removeEventListener('afterprint', done); };
-    window.addEventListener('afterprint', done);
-    // Esperar a que cargue el logo antes de abrir el diálogo de impresión
-    const img = $('#printArea img');
-    const go = () => { window.print(); setTimeout(done, 1000); };
-    img.complete ? go() : (img.onload = img.onerror = go);
-  }
-
   $('#verses').addEventListener('click', e => {
     const verse = e.target.closest('.verse'); if (!verse) return;
     const v = +verse.dataset.v;
-    const panel = e.target.closest('.panel');
-    if (!panel) { state.active === v ? closePanel() : openPanel(v); return; }
+    const box = e.target.closest('.vactions');
+    if (!box) { state.active === v ? closeActions() : openActions(v); return; }
     const btn = e.target.closest('[data-act]'); if (!btn) return;
     const act = btn.dataset.act;
-    if (act === 'add') showForm(panel);
-    else if (act === 'cancel') panel.querySelector('.form-slot').innerHTML = '';
-    else if (act === 'save') saveForm(panel);
+    if (act === 'comment') showCommentForm(box);
+    else if (act === 'forum') showForum(box, v);
     else if (act === 'share') share(v);
-    else if (act === 'pdf') printVerse(v);
-    else if (act === 'edit') showForm(panel, state.comments.find(c => c.id === btn.closest('.comment').dataset.id));
-    else if (act === 'del') deleteComment(btn.closest('.comment').dataset.id);
+    else if (act === 'cancel') box.querySelector('.slot').innerHTML = '';
+    else if (act === 'save') saveComment(box);
+    else if (act === 'delete') deleteComment(box);
+    else if (act === 'post') publish(box);
   });
   $('#verses').addEventListener('keydown', e => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('verse')) {
-      e.preventDefault(); const v = +e.target.dataset.v; state.active === v ? closePanel() : openPanel(v);
+      e.preventDefault(); const v = +e.target.dataset.v; state.active === v ? closeActions() : openActions(v);
     }
   });
 
   // ---------- Menú lateral ----------
   const drawer = $('#drawer'), scrim = $('#scrim');
+  const SECTIONS = ['bibleNav', 'commentIndex', 'forumIndex'];
   function openDrawer(section) {
     renderBookList();
-    if (section) for (const id of ['bibleNav', 'commentIndex']) setSection(id, id === section);
+    if (section) for (const id of SECTIONS) setSection(id, id === section);
     drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false');
     scrim.hidden = false; $('#menuBtn').setAttribute('aria-expanded', 'true');
     if (section === 'bibleNav') $(`#bookList [data-book="${state.book}"]`)?.scrollIntoView({ block: 'center' });
@@ -311,10 +324,10 @@
     const t = drawer.querySelector(`[data-target="${id}"]`);
     t.setAttribute('aria-expanded', open); $('#' + id).hidden = !open;
   }
-  // Acordeón: abrir una sección cierra la otra
+  // Acordeón: abrir una sección cierra las demás
   drawer.querySelectorAll('.section-toggle').forEach(t => t.addEventListener('click', () => {
     const open = t.getAttribute('aria-expanded') !== 'true';
-    drawer.querySelectorAll('.section-toggle').forEach(o => setSection(o.dataset.target, false));
+    for (const id of SECTIONS) setSection(id, false);
     setSection(t.dataset.target, open);
   }));
   $('#menuBtn').addEventListener('click', () => openDrawer());
@@ -322,28 +335,27 @@
   scrim.addEventListener('click', closeDrawer);
   $('#chapterTitle').addEventListener('click', () => { expandedBook = state.book; openDrawer('bibleNav'); });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { drawer.classList.contains('open') ? closeDrawer() : closePanel(); }
+    if (e.key === 'Escape') { drawer.classList.contains('open') ? closeDrawer() : closeActions(); }
     if (e.target.matches('input, textarea')) return;
     if (e.key === 'ArrowLeft') step(-1);
     if (e.key === 'ArrowRight') step(1);
   });
 
   let expandedBook = null;
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   function renderBookList() {
-    const q = $('#bookFilter').value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    const counts = new Map();
-    for (const c of state.comments) counts.set(`${c.book}:${c.chapter}`, 1);
+    const q = norm($('#bookFilter').value.trim());
+    const withComments = new Set(state.comments.map(c => `${c.book}:${c.chapter}`));
     let html = '';
     for (const t of ['AT', 'NT']) {
-      const books = state.books.filter(b => b.testament === t &&
-        (!q || b.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q)));
+      const books = state.books.filter(b => b.testament === t && (!q || norm(b.name).includes(q)));
       if (!books.length) continue;
       html += `<div class="testament">${t === 'AT' ? 'Antiguo Testamento' : 'Nuevo Testamento'}</div>`;
       for (const b of books) {
         const open = expandedBook === b.id;
         html += `<button class="book-btn${b.id === state.book ? ' current' : ''}" data-book="${b.id}" aria-expanded="${open}">${esc(b.name)}<span class="chev"></span></button>`;
         if (open) html += `<div class="chapter-grid">${b.chapters.map((_, i) =>
-          `<button data-b="${b.id}" data-c="${i + 1}" class="${b.id === state.book && i + 1 === state.chapter ? 'current' : ''}${counts.has(`${b.id}:${i + 1}`) ? ' has-c' : ''}">${i + 1}</button>`).join('')}</div>`;
+          `<button data-b="${b.id}" data-c="${i + 1}" class="${b.id === state.book && i + 1 === state.chapter ? 'current' : ''}${withComments.has(`${b.id}:${i + 1}`) ? ' has-c' : ''}">${i + 1}</button>`).join('')}</div>`;
       }
     }
     $('#bookList').innerHTML = html || '<div class="empty">Ningún libro coincide.</div>';
@@ -355,73 +367,85 @@
     const bk = e.target.closest('[data-book]');
     if (bk) {
       const id = +bk.dataset.book;
-      const b = bookOf(id);
-      if (b.chapters.length === 1) { closeDrawer(); go(id, 1); return; }
+      if (bookOf(id).chapters.length === 1) { closeDrawer(); go(id, 1); return; }
       expandedBook = expandedBook === id ? null : id;
       renderBookList();
     }
   });
 
-  // Índice de comentarios: Libro → Capítulo:Versículo → comentarios
-  const openIdx = { books: new Set(), refs: new Set() };
-  function renderCommentIndex() {
-    $('#commentTotal').textContent = state.comments.length;
-    const el = $('#commentIndex');
-    if (!state.comments.length) {
-      el.innerHTML = '<div class="empty">Aún no hay comentarios. Pulsa cualquier versículo para añadir uno.</div>';
-      return;
-    }
-    const groups = new Map();
-    for (const [k, list] of state.byRef) {
-      const [b] = k.split(':').map(Number);
-      if (!groups.has(b)) groups.set(b, []);
-      groups.get(b).push([k, list]);
-    }
-    const sortRef = (a, b) => { const [, c1, v1] = a[0].split(':').map(Number), [, c2, v2] = b[0].split(':').map(Number); return c1 - c2 || v1 - v2; };
-    let html = '';
-    for (const b of [...groups.keys()].sort((x, y) => x - y)) {
-      const refs = groups.get(b).sort(sortRef);
-      const total = refs.reduce((s, [, l]) => s + l.length, 0);
-      const bOpen = openIdx.books.has(b);
-      html += `<button class="idx-book" data-ib="${b}" aria-expanded="${bOpen}">${esc(bookOf(b).name)}<span class="count">${total}</span><span class="chev"></span></button>`;
-      if (!bOpen) continue;
-      html += '<div class="idx-refs">';
-      for (const [k, list] of refs) {
-        const [, c, v] = k.split(':').map(Number);
-        const rOpen = openIdx.refs.has(k);
-        html += `<button class="idx-ref" data-ir="${k}" aria-expanded="${rOpen}">Versículo ${c}:${v}<span class="count">${list.length}</span><span class="chev"></span></button>`;
-        if (rOpen) {
-          const txt = state.cache.get(b)?.[c - 1]?.[v - 1];
-          html += `<div class="idx-comments">
-            ${txt ? `<p class="idx-verse">«${esc(txt)}»</p>` : ''}
-            <div class="comments" style="margin-top:0">${list.map(cm => `
-              <div class="comment"><div class="comment-meta"><span class="author-tag ${esc(cm.author)}">${esc(cm.author)}</span><span>${fmtDate(cm.createdAt)}</span></div>
-              <div class="comment-text">${esc(cm.text)}</div></div>`).join('')}</div>
-            <p style="margin:8px 0 0"><button class="idx-go" data-goto="${k}">Ir al versículo ›</button></p>
-          </div>`;
-        }
+  // Índices desplegables: Libro → Capítulo:Versículo → contenido
+  function makeIndex({ el, countEl, byRef, emptyText, refLabelText, body, gotoMode, gotoText }) {
+    const open = { books: new Set(), refs: new Set() };
+    function render() {
+      const total = [...byRef()].reduce((s, [, l]) => s + l.length, 0);
+      countEl.textContent = total;
+      if (!total) { el.innerHTML = `<div class="empty">${emptyText}</div>`; return; }
+      const groups = new Map();
+      for (const [k, list] of byRef()) {
+        const b = +k.split(':')[0];
+        if (!groups.has(b)) groups.set(b, []);
+        groups.get(b).push([k, list]);
       }
-      html += '</div>';
+      const cmp = (a, b) => { const [, c1, v1] = a[0].split(':').map(Number), [, c2, v2] = b[0].split(':').map(Number); return c1 - c2 || v1 - v2; };
+      let html = '';
+      for (const b of [...groups.keys()].sort((x, y) => x - y)) {
+        const refs = groups.get(b).sort(cmp);
+        const bOpen = open.books.has(b);
+        html += `<button class="idx-book" data-ib="${b}" aria-expanded="${bOpen}">${esc(bookOf(b).name)}<span class="count">${refs.length}</span><span class="chev"></span></button>`;
+        if (!bOpen) continue;
+        html += '<div class="idx-refs">';
+        for (const [k, list] of refs) {
+          const [, c, v] = k.split(':').map(Number);
+          const rOpen = open.refs.has(k);
+          html += `<button class="idx-ref" data-ir="${k}" aria-expanded="${rOpen}">${refLabelText(c, v, list)}<span class="chev"></span></button>`;
+          if (rOpen) {
+            const txt = state.cache.get(b)?.[c - 1]?.[v - 1];
+            html += `<div class="idx-body">
+              ${txt ? `<p class="idx-verse">«${esc(txt)}»</p>` : ''}
+              ${body(list)}
+              <p class="idx-go-row"><button class="idx-go" data-goto="${k}">${gotoText} ›</button></p>
+            </div>`;
+          }
+        }
+        html += '</div>';
+      }
+      el.innerHTML = html;
     }
-    el.innerHTML = html;
+    el.addEventListener('click', async e => {
+      const t = e.target.closest('[data-ib],[data-ir],[data-goto]'); if (!t) return;
+      if (t.dataset.goto) {
+        const [b, c, v] = t.dataset.goto.split(':').map(Number);
+        closeDrawer(); state.pendingOpen = { v, mode: gotoMode }; go(b, c, v); return;
+      }
+      if (t.dataset.ib) {
+        const b = +t.dataset.ib;
+        open.books.has(b) ? open.books.delete(b) : open.books.add(b);
+      } else {
+        const k = t.dataset.ir;
+        if (open.refs.has(k)) open.refs.delete(k);
+        else { open.refs.add(k); try { await loadBook(+k.split(':')[0]); } catch { /* se muestra sin texto */ } }
+      }
+      render();
+    });
+    return render;
   }
-  $('#commentIndex').addEventListener('click', async e => {
-    const t = e.target.closest('[data-ib],[data-ir],[data-goto]'); if (!t) return;
-    if (t.dataset.goto) {
-      const [b, c, v] = t.dataset.goto.split(':').map(Number);
-      closeDrawer(); goAndOpen(b, c, v); return;
-    }
-    if (t.dataset.ib) {
-      const b = +t.dataset.ib;
-      openIdx.books.has(b) ? openIdx.books.delete(b) : openIdx.books.add(b);
-    } else {
-      const k = t.dataset.ir;
-      if (openIdx.refs.has(k)) openIdx.refs.delete(k);
-      else { openIdx.refs.add(k); try { await loadBook(+k.split(':')[0]); } catch { /* se muestra sin texto */ } }
-    }
-    renderCommentIndex();
+  const renderCommentIndex = makeIndex({
+    el: $('#commentIndex'), countEl: $('#commentTotal'), byRef: () => state.byRef,
+    emptyText: 'Aún no hay comentarios. Pulsa cualquier versículo para añadir uno.',
+    refLabelText: (c, v) => `Versículo ${c}:${v}`,
+    body: list => list.map(cm => `<div class="idx-comment">${fmtText(cm.text)}</div>`).join(''),
+    gotoMode: null, gotoText: 'Ir al versículo',
   });
-  function goAndOpen(b, c, v) { state.pendingOpen = v; go(b, c, v); }
+  const renderForumIndex = makeIndex({
+    el: $('#forumIndex'), countEl: $('#forumTotal'), byRef: () => state.postsByRef,
+    emptyText: 'Aún no hay discusiones. Pulsa un versículo y elige «Discusión» para empezar una.',
+    refLabelText: (c, v, list) => `Versículo ${c}:${v}<span class="count">${list.length} mensaje${list.length > 1 ? 's' : ''}</span>`,
+    body: list => {
+      const last = list[list.length - 1];
+      return `<p class="idx-last">Último mensaje de <b>${esc(last.name)}</b> · ${fmtDate(last.createdAt)}</p>`;
+    },
+    gotoMode: 'forum', gotoText: 'Abrir discusión',
+  });
 
   for (const [id, d] of [['prevCh', -1], ['prevCh2', -1], ['nextCh', 1], ['nextCh2', 1]])
     $('#' + id).addEventListener('click', () => step(d));
@@ -437,9 +461,9 @@
       return;
     }
     state.book = 0;
-    await Promise.all([loadComments(), route()]);
-    // refrescar puntos verdes cuando lleguen los comentarios
-    $('#verses').querySelectorAll('.verse').forEach(el => refreshDot(+el.dataset.v));
-    renderCommentIndex();
+    await Promise.all([loadAll(), route()]);
+    // mostrar comentarios cuando lleguen
+    $('#verses').querySelectorAll('.verse').forEach(el => refreshVerse(+el.dataset.v));
+    renderCommentIndex(); renderForumIndex();
   })();
 })();
