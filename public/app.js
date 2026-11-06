@@ -366,6 +366,44 @@
   });
   $('#closeDrawer').addEventListener('click', closeDrawer);
   scrim.addEventListener('click', closeDrawer);
+
+  // Gesto: deslizar a la derecha abre el menú; a la izquierda lo cierra. El menú sigue al dedo.
+  (() => {
+    let sx = 0, sy = 0, dir = null, startOpen = false, w = 0, dx = 0, t0 = 0;
+    const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid') || !$('#newsModal').hidden;
+    document.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = Date.now();
+      dir = null; dx = 0; startOpen = drawer.classList.contains('open'); w = drawer.offsetWidth;
+    }, { passive: true });
+    document.addEventListener('touchmove', e => {
+      if (dir === 'none') return;
+      const x = e.touches[0].clientX - sx, y = e.touches[0].clientY - sy;
+      if (!dir) {
+        if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
+        // solo gestos claramente horizontales y en la dirección útil
+        dir = Math.abs(x) > Math.abs(y) * 1.3 && (startOpen ? x < 0 : x > 0) ? 'h' : 'none';
+        if (dir !== 'h') return;
+        drawer.style.transition = 'none';
+        scrim.hidden = false; scrim.style.animation = 'none';
+      }
+      dx = x;
+      const off = startOpen ? Math.min(0, dx) : Math.min(0, -w + dx);   // desplazamiento del menú (0 = abierto)
+      drawer.style.transform = `translateX(${off}px)`;
+      scrim.style.opacity = String(Math.max(0, 1 + off / w));
+    }, { passive: true });
+    const end = () => {
+      if (dir !== 'h') { dir = null; return; }
+      dir = null;
+      const fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;   // gesto rápido (px/ms)
+      const open = startOpen ? !(dx < -w / 3 || (fast && dx < -30)) : (dx > w / 3 || (fast && dx > 30));
+      drawer.style.transition = ''; drawer.style.transform = '';
+      scrim.style.opacity = ''; scrim.style.animation = '';
+      open ? openDrawer() : closeDrawer();
+    };
+    document.addEventListener('touchend', end);
+    document.addEventListener('touchcancel', end);
+  })();
   $('#chapterTitle').addEventListener('click', () => {
     expandedBook = state.book; openTestaments.add(bookOf(state.book).testament); openDrawer('bibleNav');
   });

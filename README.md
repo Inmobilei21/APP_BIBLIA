@@ -15,6 +15,7 @@ y comentar cada versículo.
   3. *Discusión*: los versículos con conversación abierta, con enlace a cada discusión.
 - **Novedades**: tras cada actualización se muestra lo que ha cambiado; con la app abierta aparece un aviso «Actualizar».
   El historial está en *Novedades*, al final del menú lateral.
+- Deslizar a la derecha abre el menú lateral; a la izquierda lo cierra.
 - Compartir usa el menú nativo del móvil (o copia al portapapeles).
 - Instalable en el móvil (icono: cruz dorada sobre fondo negro).
 

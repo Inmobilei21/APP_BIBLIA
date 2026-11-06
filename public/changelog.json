@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "1.4",
+      "date": "2026-11-06",
+      "changes": [
+        "Desliza el dedo hacia la derecha para abrir el menú lateral, y hacia la izquierda para cerrarlo."
+      ]
+    },
+    {
       "version": "1.3",
       "date": "2026-11-06",
       "changes": [
