@@ -10,6 +10,7 @@
   const ICON = {
     comment: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
     share: '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>',
+    ribbon: '<svg viewBox="0 0 24 24" class="ribbon-ico"><path d="M7 1h10v22l-5-5.5L7 23z"/></svg>',
     forum: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   };
 
@@ -23,6 +24,7 @@
     book: 1, chapter: 1,
     active: null,           // versículo con las acciones abiertas
     pendingOpen: null,      // { v, mode } para abrir tras navegar
+    bookmark: null,         // { book, chapter, verse } — «Seguir leyendo»
   };
   const key = (b, c, v) => `${b}:${c}:${v}`;
   const bookOf = id => state.books[id - 1];
@@ -58,7 +60,8 @@
   const indexComments = () => { state.byRef = group(state.comments); };
   const indexPosts = () => { state.postsByRef = group(state.posts); };
   async function loadAll() {
-    const [c, p] = await Promise.allSettled([api('GET', '/api/comments'), api('GET', '/api/posts')]);
+    const [c, p, bm] = await Promise.allSettled([api('GET', '/api/comments'), api('GET', '/api/posts'), api('GET', '/api/bookmark')]);
+    state.bookmark = bm.status === 'fulfilled' ? bm.value : null;
     state.comments = c.status === 'fulfilled' ? c.value : [];
     state.posts = p.status === 'fulfilled' ? p.value : [];
     if (c.status === 'rejected' || p.status === 'rejected') toast('No se pudieron cargar los comentarios');
@@ -127,7 +130,7 @@
     if (state.book !== b || state.chapter !== c) return; // el usuario ya navegó a otro sitio
     wrap.innerHTML = chapters[c - 1].map((t, i) => `
       <section class="verse" id="v${i + 1}" data-v="${i + 1}" tabindex="0" aria-label="Versículo ${i + 1}">
-        <span class="vnum">${i + 1}</span><span class="vtext">${esc(t)}</span>${extrasHtml(b, c, i + 1)}
+        ${ribbonHtml(b, c, i + 1)}<span class="vnum">${i + 1}</span><span class="vtext">${esc(t)}</span>${extrasHtml(b, c, i + 1)}
       </section>`).join('');
   }
   // Punto + comentario visible justo debajo del texto
@@ -136,6 +139,30 @@
     if (!list.length) return '';
     return `<span class="dot" title="Tiene comentario"></span>
       <div class="vcomment">${list.map(cm => `<p>${fmtText(cm.text)}</p>`).join('')}</div>`;
+  }
+  function ribbonHtml(b, c, v) {
+    const bm = state.bookmark;
+    return bm && bm.book === b && bm.chapter === c && bm.verse === v
+      ? `<span class="vribbon" title="Seguir leyendo aquí">${ICON.ribbon}</span>` : '';
+  }
+  function refreshRibbons() {
+    document.querySelectorAll('.vribbon').forEach(x => x.remove());
+    const bm = state.bookmark;
+    if (bm && bm.book === state.book && bm.chapter === state.chapter)
+      document.getElementById(`v${bm.verse}`)?.insertAdjacentHTML('afterbegin', ribbonHtml(bm.book, bm.chapter, bm.verse));
+    renderContinue();
+  }
+  function renderContinue() {
+    const bm = state.bookmark, btn = $('#continueBtn');
+    btn.disabled = !bm;
+    $('#continueRef').textContent = bm ? refLabel(bm.book, bm.chapter, bm.verse) : 'Aún no has marcado ningún versículo';
+  }
+  async function markHere(v) {
+    try {
+      state.bookmark = await api('PUT', '/api/bookmark', { book: state.book, chapter: state.chapter, verse: v });
+      refreshRibbons(); closeActions();
+      toast('Marcado para seguir leyendo');
+    } catch (e) { toast('No se pudo marcar: ' + e.message); }
   }
   function refreshVerse(v) {
     const el = document.getElementById(`v${v}`); if (!el) return;
@@ -168,6 +195,7 @@
     box.innerHTML = `
       <div class="actions">
         <button class="act" data-act="comment">${ICON.comment}${has ? 'Editar' : 'Añadir comentario'}</button>
+        <button class="act" data-act="mark">${ICON.ribbon}Marcar aquí</button>
         <button class="act" data-act="share">${ICON.share}Compartir</button>
         <button class="act" data-act="forum">${ICON.forum}Discusión${n ? ` <span class="act-count">${n}</span>` : ''}</button>
       </div>
@@ -295,6 +323,7 @@
     if (act === 'comment') showCommentForm(box);
     else if (act === 'forum') showForum(box, v);
     else if (act === 'share') share(v);
+    else if (act === 'mark') markHere(v);
     else if (act === 'cancel') box.querySelector('.slot').innerHTML = '';
     else if (act === 'save') saveComment(box);
     else if (act === 'delete') deleteComment(box);
@@ -331,9 +360,15 @@
     setSection(t.dataset.target, open);
   }));
   $('#menuBtn').addEventListener('click', () => openDrawer());
+  $('#continueBtn').addEventListener('click', () => {
+    const bm = state.bookmark; if (!bm) return;
+    closeDrawer(); go(bm.book, bm.chapter, bm.verse);
+  });
   $('#closeDrawer').addEventListener('click', closeDrawer);
   scrim.addEventListener('click', closeDrawer);
-  $('#chapterTitle').addEventListener('click', () => { expandedBook = state.book; openDrawer('bibleNav'); });
+  $('#chapterTitle').addEventListener('click', () => {
+    expandedBook = state.book; openTestaments.add(bookOf(state.book).testament); openDrawer('bibleNav');
+  });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { drawer.classList.contains('open') ? closeDrawer() : closeActions(); }
     if (e.target.matches('input, textarea')) return;
@@ -342,6 +377,7 @@
   });
 
   let expandedBook = null;
+  const openTestaments = new Set();
   const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   function renderBookList() {
     const q = norm($('#bookFilter').value.trim());
@@ -350,13 +386,17 @@
     for (const t of ['AT', 'NT']) {
       const books = state.books.filter(b => b.testament === t && (!q || norm(b.name).includes(q)));
       if (!books.length) continue;
-      html += `<div class="testament">${t === 'AT' ? 'Antiguo Testamento' : 'Nuevo Testamento'}</div>`;
+      const tOpen = !!q || openTestaments.has(t);   // al buscar se muestran los resultados abiertos
+      html += `<button class="testament" data-testament="${t}" aria-expanded="${tOpen}">${t === 'AT' ? 'Antiguo Testamento' : 'Nuevo Testamento'}<span class="count">${books.length}</span><span class="chev"></span></button>`;
+      if (!tOpen) continue;
+      html += '<div class="testament-books">';
       for (const b of books) {
         const open = expandedBook === b.id;
         html += `<button class="book-btn${b.id === state.book ? ' current' : ''}" data-book="${b.id}" aria-expanded="${open}">${esc(b.name)}<span class="chev"></span></button>`;
         if (open) html += `<div class="chapter-grid">${b.chapters.map((_, i) =>
           `<button data-b="${b.id}" data-c="${i + 1}" class="${b.id === state.book && i + 1 === state.chapter ? 'current' : ''}${withComments.has(`${b.id}:${i + 1}`) ? ' has-c' : ''}">${i + 1}</button>`).join('')}</div>`;
       }
+      html += '</div>';
     }
     $('#bookList').innerHTML = html || '<div class="empty">Ningún libro coincide.</div>';
   }
@@ -364,6 +404,12 @@
   $('#bookList').addEventListener('click', e => {
     const ch = e.target.closest('[data-c]');
     if (ch) { closeDrawer(); go(+ch.dataset.b, +ch.dataset.c); return; }
+    const ts = e.target.closest('[data-testament]');
+    if (ts) {
+      const t = ts.dataset.testament;
+      openTestaments.has(t) ? openTestaments.delete(t) : openTestaments.add(t);
+      renderBookList(); return;
+    }
     const bk = e.target.closest('[data-book]');
     if (bk) {
       const id = +bk.dataset.book;
@@ -464,6 +510,6 @@
     await Promise.all([loadAll(), route()]);
     // mostrar comentarios cuando lleguen
     $('#verses').querySelectorAll('.verse').forEach(el => refreshVerse(+el.dataset.v));
-    renderCommentIndex(); renderForumIndex();
+    renderCommentIndex(); renderForumIndex(); refreshRibbons();
   })();
 })();

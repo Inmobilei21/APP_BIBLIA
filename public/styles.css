@@ -81,7 +81,34 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
 }
 .filter:focus { outline: 2px solid var(--gold-light); border-color: var(--gold); }
-.testament { font-family: var(--display); font-size: 12px; letter-spacing: .1em; color: var(--ink-soft); padding: 10px 10px 4px; text-transform: uppercase; }
+.testament {
+  width: 100%; display: flex; align-items: center; gap: 8px; border: 0; background: transparent; text-align: left;
+  font-family: var(--display); font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 10px 10px; border-radius: 8px;
+}
+.testament:hover { background: var(--gold-pale); }
+.testament .count { margin-left: auto; font-weight: 400; letter-spacing: 0; color: var(--ink-soft); }
+.testament .count + .chev { margin-left: 4px; width: 7px; height: 7px; }
+.testament-books { margin: 0 0 6px 8px; padding-left: 6px; border-left: 2px solid var(--gold-light); }
+
+/* Marcapáginas rojo de misal */
+:root { --ribbon: #a3162a; }
+.ribbon-ico { fill: var(--ribbon); stroke: none !important; }
+.continue {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 0;
+  border-bottom: 1px solid var(--line); background: #fff; text-align: left;
+}
+.continue:hover:not(:disabled) { background: var(--gold-pale); }
+.continue:disabled { cursor: default; }
+.continue:disabled .ribbon-ico { opacity: .35; }
+.continue:disabled .chev { display: none; }
+.continue .ribbon-ico { width: 22px; height: 30px; flex-shrink: 0; }
+.continue-title { display: block; font-size: 16px; font-weight: 600; color: var(--ribbon); }
+.continue-ref { display: block; font-size: 14px; color: var(--ink-soft); }
+.continue .chev { transform: rotate(-45deg); }
+.vribbon { position: absolute; left: -14px; top: -1px; width: 14px; height: 32px; }
+.vribbon .ribbon-ico { width: 14px; height: 32px; display: block; }
+.act .ribbon-ico { fill: var(--ribbon); }
 
 .book-btn, .idx-book, .idx-ref {
   width: 100%; display: flex; align-items: center; gap: 8px; text-align: left;

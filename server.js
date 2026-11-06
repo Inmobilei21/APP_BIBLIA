@@ -27,6 +27,15 @@ function makeStore() {
           id TEXT PRIMARY KEY, book INT NOT NULL, chapter INT NOT NULL, verse INT NOT NULL,
           name TEXT NOT NULL, text TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
         await pool.query('CREATE INDEX IF NOT EXISTS posts_ref ON posts(book, chapter, verse)');
+        await pool.query('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value JSONB NOT NULL)');
+      },
+      async getSetting(k) {
+        const { rows } = await pool.query('SELECT value FROM settings WHERE key=$1', [k]);
+        return rows[0] ? rows[0].value : null;
+      },
+      async setSetting(k, v) {
+        await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
+          [k, JSON.stringify(v)]);
       },
       async listPosts() {
         const { rows } = await pool.query('SELECT * FROM posts ORDER BY book, chapter, verse, created_at');
@@ -61,7 +70,8 @@ function makeStore() {
   }
   const file = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'comments.json');
   const postsFile = path.join(path.dirname(file), 'posts.json');
-  let items = [], posts = [];
+  const settingsFile = path.join(path.dirname(file), 'settings.json');
+  let items = [], posts = [], settings = {};
   const save = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(items, null, 1)); };
   const savePosts = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(postsFile, JSON.stringify(posts, null, 1)); };
   return {
@@ -69,6 +79,12 @@ function makeStore() {
     async init() {
       try { items = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { items = []; }
       try { posts = JSON.parse(fs.readFileSync(postsFile, 'utf8')); } catch { posts = []; }
+      try { settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch { settings = {}; }
+    },
+    async getSetting(k) { return settings[k] ?? null; },
+    async setSetting(k, v) {
+      settings[k] = v;
+      fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(settingsFile, JSON.stringify(settings));
     },
     async listPosts() { return [...posts]; },
     async createPost(p) {
@@ -112,6 +128,17 @@ function validate(body, partial) {
 // ---------- API ----------
 const wrap = fn => (req, res) => fn(req, res).catch(e => { console.error(e); res.status(500).json({ error: 'Error del servidor' }); });
 app.get('/api/health', (req, res) => res.json({ ok: true, storage: store.kind.startsWith('archivo') ? 'file' : 'postgres' }));
+// Marcapáginas «Seguir leyendo»: solo hay uno; el nuevo sustituye al anterior
+app.get('/api/bookmark', wrap(async (req, res) => res.json(await store.getSetting('bookmark'))));
+app.put('/api/bookmark', wrap(async (req, res) => {
+  const book = Number(req.body.book), chapter = Number(req.body.chapter), verse = Number(req.body.verse);
+  const b = bibleIndex.books[book - 1];
+  if (!b || !(chapter >= 1 && chapter <= b.chapters.length) || !(verse >= 1 && verse <= b.chapters[chapter - 1]))
+    return res.status(400).json({ error: 'Referencia bíblica no válida' });
+  const bm = { book, chapter, verse, savedAt: new Date().toISOString() };
+  await store.setSetting('bookmark', bm);
+  res.json(bm);
+}));
 app.get('/api/posts', wrap(async (req, res) => res.json(await store.listPosts())));
 app.post('/api/posts', wrap(async (req, res) => {
   const v = validate(req.body, false); if (v.error) return res.status(400).json(v);

@@ -7,8 +7,10 @@ y comentar cada versículo.
 - Cada versículo es una sección interactiva. Al pulsarlo aparecen (discretos, debajo): **Añadir comentario** (o **Editar** si ya hay uno), **Compartir** y **Discusión**.
 - El comentario se muestra justo debajo del texto del versículo, con un punto dorado en la esquina. Para borrarlo, se edita y se deja vacío.
 - **Discusión**: un foro por versículo donde cualquiera puede escribir con su nombre (se guardan nombre y fecha).
+- **Marcar aquí**: deja una cinta roja de misal en el versículo (solo hay una; la nueva sustituye a la anterior).
 - **Menú lateral**:
-  1. *La Biblia*: libros (Antiguo y Nuevo Testamento) y capítulos.
+  0. *Seguir leyendo*: lleva directamente al versículo marcado.
+  1. *La Biblia*: Antiguo y Nuevo Testamento desplegables → libros → capítulos.
   2. *Índice de comentarios*: solo los libros con comentarios, desplegables por libro → versículo → comentario, con enlace al versículo.
   3. *Discusión*: los versículos con conversación abierta, con enlace a cada discusión.
 - Compartir usa el menú nativo del móvil (o copia al portapapeles).
@@ -32,6 +34,7 @@ Con un servicio PostgreSQL enlazado (`DATABASE_URL`), los comentarios se guardan
 | POST | `/api/comments` | `{book, chapter, verse, text}` |
 | PUT | `/api/comments/:id` | `{text}` |
 | DELETE | `/api/comments/:id` | Borrar |
+| GET/PUT | `/api/bookmark` | Marcapáginas `{book, chapter, verse}` |
 | GET | `/api/posts` | Mensajes de discusión |
 | POST | `/api/posts` | `{book, chapter, verse, name, text}` |
 
