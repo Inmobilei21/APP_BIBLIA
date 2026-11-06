@@ -1,0 +1,6 @@
+{
+  "books": [
+    { "id": 42, "part": "I",  "name": "Evangelio según Lucas",   "short": "Lucas",  "chapters": 24 },
+    { "id": 44, "part": "II", "name": "Hechos de los apóstoles", "short": "Hechos", "chapters": 28 }
+  ]
+}

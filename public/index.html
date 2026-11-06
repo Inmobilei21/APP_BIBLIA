@@ -3,10 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Santa Biblia</title>
-  <meta name="description" content="Santa Biblia Reina-Valera 1909 con comentarios por versículo">
+  <title>Evangelio</title>
+  <meta name="description" content="Evangelio según Lucas y Hechos de los apóstoles, con comentarios por versículo">
   <meta name="theme-color" content="#b08a2e">
-  <link rel="icon" href="/icons/cross.svg" type="image/svg+xml">
+  <link rel="icon" href="/icons/favicon-32.png" type="image/png">
+  <meta name="apple-mobile-web-app-title" content="Evangelio">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/styles.css">
@@ -17,8 +19,8 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
     <div class="brand">
-      <img src="/icons/cross.svg" alt="" class="brand-icon">
-      <span>Santa Biblia</span>
+      <img src="/icons/icon-192.png" alt="" class="brand-icon">
+      <span>Evangelio</span>
     </div>
     <div class="spacer"></div>
   </header>
@@ -28,8 +30,8 @@
     <div class="drawer-head">
       <img src="/icons/icon-192.png" alt="" class="drawer-logo">
       <div>
-        <div class="drawer-title">Santa Biblia</div>
-        <div class="drawer-sub">Reina-Valera 1909</div>
+        <div class="drawer-title">Evangelio</div>
+        <div class="drawer-sub">Lucas · Hechos de los apóstoles</div>
       </div>
       <button class="icon-btn close" id="closeDrawer" aria-label="Cerrar">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -44,10 +46,9 @@
 
     <section class="drawer-section">
       <button class="section-toggle" aria-expanded="true" data-target="bibleNav">
-        <span class="num">I.</span> La Biblia <span class="chev"></span>
+        <span class="num">I.</span> Libros <span class="chev"></span>
       </button>
       <div id="bibleNav" class="section-body">
-        <input type="search" id="bookFilter" class="filter" placeholder="Buscar libro…" autocomplete="off">
         <div id="bookList"></div>
       </div>
     </section>
@@ -79,6 +80,7 @@
     <article id="verses" class="verses" aria-live="polite"></article>
     <div class="chapter-foot">
       <button class="btn ghost" id="prevCh2">‹ Anterior</button>
+      <button class="edit-chapter" id="editChapterBtn">Editar capítulo</button>
       <button class="btn ghost" id="nextCh2">Siguiente ›</button>
     </div>
   </main>
@@ -100,6 +102,27 @@
       </div>
       <div class="modal-body" id="newsBody"></div>
       <div class="modal-foot"><button class="btn primary" id="newsOk">Entendido</button></div>
+    </div>
+  </div>
+
+  <div class="modal-scrim" id="editorModal" hidden>
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+      <div class="modal-head">
+        <h2 id="editorTitle">Texto del capítulo</h2>
+        <button class="icon-btn" id="editorClose" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="editor-help">Pega o escribe el texto. Cada versículo empieza por su número
+          (por ejemplo <code>1 Puesto que muchos…</code>). Para un título de sección, escribe una línea que empiece por <code>#</code>.</p>
+        <textarea id="editorText" class="editor-text" spellcheck="false" placeholder="# Prólogo&#10;1 Puesto que muchos han intentado…&#10;2 tal como nos lo transmitieron…"></textarea>
+        <p class="editor-status" id="editorStatus"></p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" id="editorCancel">Cancelar</button>
+        <button class="btn primary" id="editorSave">Guardar</button>
+      </div>
     </div>
   </div>
 

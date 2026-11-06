@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.0",
+      "date": "2026-11-06",
+      "changes": [
+        "La app pasa a llamarse «Evangelio», con el nuevo icono de la cruz dorada.",
+        "Solo tus libros de cabecera: Evangelio según Lucas (parte I) y Hechos de los apóstoles (parte II). Se quita la Biblia Reina-Valera.",
+        "Puedes añadir el texto de tu edición: pega cada capítulo con «Añadir el texto del capítulo» o «Editar capítulo», y corrige versículos sueltos con «Editar texto».",
+        "Los comentarios quedan ocultos; el punto dorado de la esquina avisa, y al pulsar el versículo aparecen.",
+        "La marca de «Seguir leyendo» ya se puede quitar con «Quitar marca».",
+        "En el menú, cada libro es desplegable con sus capítulos.",
+        "Con el menú lateral abierto, el texto de fondo ya no se desplaza."
+      ]
+    },
+    {
       "version": "1.4",
       "date": "2026-11-06",
       "changes": [

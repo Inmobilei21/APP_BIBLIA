@@ -260,3 +260,50 @@ main { max-width: 760px; margin: 0 auto; padding: 18px 16px 80px; }
 .news-version ul { margin: 0; padding-left: 20px; }
 .news-version li { font-size: 15px; line-height: 1.5; margin-bottom: 4px; }
 .modal-foot { display: flex; justify-content: flex-end; padding: 10px 18px 16px; }
+
+/* ---------- v2: Evangelio ---------- */
+/* El comentario queda oculto; se ve al pulsar el versículo */
+.vcomment { display: none; }
+.verse.active .vcomment { display: block; }
+
+/* Bloqueo del fondo con el menú o una ventana abierta */
+body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
+.modal-body, .drawer { overscroll-behavior: contain; }
+
+.brand-icon { border: 1px solid var(--line); background: #fff; }
+.drawer-logo { background: #fff; }
+
+.chapter-title small { display: block; font-size: 13px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+
+.book-head {
+  width: 100%; display: flex; align-items: center; gap: 8px; border: 0; background: transparent; text-align: left;
+  padding: 10px; border-radius: 10px;
+}
+.book-head:hover { background: var(--gold-pale); }
+.book-head .chev { width: 8px; height: 8px; }
+.book-part { display: block; font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+.book-name { display: block; font-size: 17px; color: var(--ink); }
+.book-head.current .book-name { color: var(--gold-deep); font-weight: 600; }
+.chapter-grid button.no-text { color: #b9ae96; border-style: dashed; }
+
+.section-title { font-size: 17px; font-weight: 600; color: var(--gold-deep); margin: 22px 12px 6px; }
+
+.empty-chapter { text-align: center; padding: 40px 16px; color: var(--ink-soft); }
+.empty-chapter p { margin: 0 0 16px; }
+
+.chapter-foot { align-items: center; }
+.edit-chapter { border: 0; background: none; color: var(--ink-soft); font-size: 14px; text-decoration: underline; padding: 6px; }
+.edit-chapter:hover { color: var(--gold-deep); }
+
+.modal-wide { max-width: 760px; height: calc(100vh - 32px); }
+.modal-wide .modal-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.editor-help { font-size: 14px; color: var(--ink-soft); margin: 0 0 10px; }
+.editor-help code { background: var(--gold-pale); padding: 0 4px; border-radius: 4px; font-size: 13px; }
+.editor-text {
+  flex: 1; min-height: 200px; width: 100%; resize: none; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+  font: inherit; font-size: 16px; line-height: 1.5; color: var(--ink);
+}
+.editor-text:focus { outline: 2px solid var(--gold-light); border-color: var(--gold); }
+.editor-status { font-size: 14px; color: var(--gold-deep); margin: 8px 0 0; min-height: 1.4em; }
+.editor-status.warn { color: var(--danger); }
+.modal-foot { gap: 8px; }
