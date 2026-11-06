@@ -493,6 +493,59 @@
     gotoMode: 'forum', gotoText: 'Abrir discusión',
   });
 
+  // ---------- Novedades y avisos de actualización ----------
+  const cmpVer = (a, b) => {
+    const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
+    return 0;
+  };
+  let loadedVersion = null, changelog = [];
+  async function fetchChangelog() {
+    const r = await fetch('/changelog.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error('sin novedades');
+    return (await r.json()).versions || [];
+  }
+  const fmtDay = d => new Date(d + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  function showNews(versions, title) {
+    if (!versions.length) return;
+    $('#newsTitle').textContent = title;
+    $('#newsBody').innerHTML = versions.map(v => `
+      <section class="news-version">
+        <h3>Versión ${esc(v.version)} <span>${esc(fmtDay(v.date))}</span></h3>
+        <ul>${v.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
+      </section>`).join('');
+    $('#newsModal').hidden = false;
+  }
+  function closeNews() {
+    $('#newsModal').hidden = true;
+    if (loadedVersion) store.set('seenVersion', loadedVersion);
+  }
+  $('#newsClose').addEventListener('click', closeNews);
+  $('#newsOk').addEventListener('click', closeNews);
+  $('#newsModal').addEventListener('click', e => { if (e.target.id === 'newsModal') closeNews(); });
+  $('#newsBtn').addEventListener('click', () => { closeDrawer(); showNews(changelog, 'Historial de novedades'); });
+  $('#updateBtn').addEventListener('click', () => location.reload());
+
+  async function initNews() {
+    try { changelog = await fetchChangelog(); } catch { return; }
+    if (!changelog.length) return;
+    loadedVersion = changelog[0].version;
+    $('#appVersion').textContent = 'v' + loadedVersion;
+    const seen = store.get('seenVersion', null);
+    // Mostrar lo nuevo desde la última versión vista (la primera vez, solo la última versión)
+    const fresh = seen ? changelog.filter(v => cmpVer(v.version, seen) > 0) : changelog.slice(0, 1);
+    if (fresh.length) showNews(fresh, fresh.length > 1 ? 'Novedades desde tu última visita' : 'Novedades de esta versión');
+    // Con la app abierta: comprobar de vez en cuando si se ha publicado otra versión
+    const check = async () => {
+      try {
+        const latest = (await fetchChangelog())[0];
+        if (latest && cmpVer(latest.version, loadedVersion) > 0) $('#updateBar').hidden = false;
+      } catch { /* sin conexión */ }
+    };
+    setInterval(check, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+  }
+
   for (const [id, d] of [['prevCh', -1], ['prevCh2', -1], ['nextCh', 1], ['nextCh2', 1]])
     $('#' + id).addEventListener('click', () => step(d));
   window.addEventListener('hashchange', route);
@@ -511,5 +564,6 @@
     // mostrar comentarios cuando lleguen
     $('#verses').querySelectorAll('.verse').forEach(el => refreshVerse(+el.dataset.v));
     renderCommentIndex(); renderForumIndex(); refreshRibbons();
+    initNews();
   })();
 })();

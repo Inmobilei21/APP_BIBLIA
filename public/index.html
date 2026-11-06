@@ -65,6 +65,8 @@
       </button>
       <div id="forumIndex" class="section-body" hidden></div>
     </section>
+
+    <button class="news-link" id="newsBtn">Novedades <span id="appVersion"></span></button>
   </nav>
 
   <main id="reader">
@@ -82,6 +84,24 @@
   </main>
 
   <div id="toast" class="toast" role="status" hidden></div>
+
+  <div class="update-bar" id="updateBar" role="status" hidden>
+    <span>Nueva versión disponible</span>
+    <button class="btn primary" id="updateBtn">Actualizar</button>
+  </div>
+
+  <div class="modal-scrim" id="newsModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
+      <div class="modal-head">
+        <h2 id="newsTitle">Novedades</h2>
+        <button class="icon-btn" id="newsClose" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="newsBody"></div>
+      <div class="modal-foot"><button class="btn primary" id="newsOk">Entendido</button></div>
+    </div>
+  </div>
 
   <script src="/app.js"></script>
 </body>

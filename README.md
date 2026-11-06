@@ -13,6 +13,8 @@ y comentar cada versículo.
   1. *La Biblia*: Antiguo y Nuevo Testamento desplegables → libros → capítulos.
   2. *Índice de comentarios*: solo los libros con comentarios, desplegables por libro → versículo → comentario, con enlace al versículo.
   3. *Discusión*: los versículos con conversación abierta, con enlace a cada discusión.
+- **Novedades**: tras cada actualización se muestra lo que ha cambiado; con la app abierta aparece un aviso «Actualizar».
+  El historial está en *Novedades*, al final del menú lateral.
 - Compartir usa el menú nativo del móvil (o copia al portapapeles).
 - Instalable en el móvil (icono: cruz dorada sobre fondo negro).
 
@@ -41,3 +43,10 @@ Con un servicio PostgreSQL enlazado (`DATABASE_URL`), los comentarios se guardan
 ## Texto bíblico
 `public/data` se genera con `npm run build:bible` a partir del JSON SpaRV de
 [scrollmapper/bible_databases](https://github.com/scrollmapper/bible_databases).
+
+## Publicar una actualización
+Añade una entrada al principio de `public/changelog.json` con un número de versión mayor:
+```json
+{ "version": "1.4", "date": "2026-11-10", "changes": ["Descripción del cambio"] }
+```
+Al desplegarse, cada usuario verá esos cambios la próxima vez que abra la app.

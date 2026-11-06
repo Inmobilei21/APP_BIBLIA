@@ -160,7 +160,8 @@ app.delete('/api/comments/:id', wrap(async (req, res) => {
 }));
 
 app.use('/data', express.static(path.join(__dirname, 'public', 'data'), { maxAge: '7d', immutable: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+// Sin caché para la app en sí: así cada actualización llega al momento
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: res => res.setHeader('Cache-Control', 'no-cache') }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 store.init()

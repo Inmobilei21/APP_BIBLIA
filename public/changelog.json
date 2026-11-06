@@ -1,0 +1,40 @@
+{
+  "versions": [
+    {
+      "version": "1.3",
+      "date": "2026-11-06",
+      "changes": [
+        "Avisos de novedades: al actualizarse la app verás aquí lo que ha cambiado.",
+        "Si tienes la app abierta cuando sale una versión nueva, aparece un aviso para actualizar.",
+        "Nuevo apartado «Novedades» al final del menú lateral con el historial de cambios."
+      ]
+    },
+    {
+      "version": "1.2",
+      "date": "2026-11-06",
+      "changes": [
+        "«Seguir leyendo» al principio del menú lateral, con cinta roja de misal.",
+        "«Marcar aquí» en cada versículo: guarda dónde te quedaste (solo una marca; la nueva sustituye a la anterior).",
+        "Antiguo y Nuevo Testamento ahora son desplegables en el menú."
+      ]
+    },
+    {
+      "version": "1.1",
+      "date": "2026-11-06",
+      "changes": [
+        "El comentario aparece justo debajo del versículo; los botones, discretos, debajo.",
+        "«Añadir comentario» pasa a «Editar» cuando ya hay uno.",
+        "Nueva «Discusión»: un foro por versículo, y su apartado en el menú.",
+        "El punto indicador ahora es dorado, como el número del versículo.",
+        "Nueva tipografía Helvetica Neue. Se quitan «Imprimir PDF» y la elección de autor."
+      ]
+    },
+    {
+      "version": "1.0",
+      "date": "2026-11-05",
+      "changes": [
+        "Primera versión: Biblia completa Reina-Valera 1909 con comentarios por versículo."
+      ]
+    }
+  ]
+}

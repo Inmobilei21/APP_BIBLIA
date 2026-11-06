@@ -228,3 +228,35 @@ main { max-width: 760px; margin: 0 auto; padding: 18px 16px 80px; }
 @keyframes flash { 0%, 40% { background: #f6e6b4; } }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- Novedades y aviso de actualización ---------- */
+.news-link {
+  display: block; width: 100%; padding: 14px 16px; border: 0; background: transparent; text-align: left;
+  font-size: 15px; color: var(--gold-deep);
+}
+.news-link:hover { background: var(--gold-pale); }
+.news-link span { color: var(--ink-soft); font-size: 13px; margin-left: 6px; }
+
+.update-bar {
+  position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 55;
+  max-width: 520px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 10px 10px 16px; border-radius: 14px; background: #1b150a; color: #f1dc98; box-shadow: var(--shadow);
+  font-size: 15px; animation: drop .2s ease;
+}
+
+.modal-scrim {
+  position: fixed; inset: 0; z-index: 70; background: rgba(20, 14, 0, .45); animation: fade .2s;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal {
+  width: 100%; max-width: 480px; max-height: calc(100vh - 32px); display: flex; flex-direction: column;
+  background: #fff; border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; border-top: 4px solid var(--gold);
+}
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 12px 6px 18px; }
+.modal-head h2 { margin: 0; font-size: 20px; font-weight: 500; color: var(--gold-deep); }
+.modal-body { overflow-y: auto; padding: 0 18px 8px; }
+.news-version h3 { font-size: 15px; font-weight: 600; margin: 12px 0 4px; color: var(--ink); }
+.news-version h3 span { font-weight: 400; color: var(--ink-soft); font-size: 13px; margin-left: 6px; }
+.news-version ul { margin: 0; padding-left: 20px; }
+.news-version li { font-size: 15px; line-height: 1.5; margin-bottom: 4px; }
+.modal-foot { display: flex; justify-content: flex-end; padding: 10px 18px 16px; }
