@@ -214,7 +214,8 @@ function requirePin(req, res, next) {
   if (!pin) return res.status(503).json({ error: 'Las peticiones aún no están configuradas' });
   const ip = req.ip, f = failures.get(ip);
   if (f && f.until > Date.now()) return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos.' });
-  const given = String(req.get('x-owner-token') || '');
+  // se ignoran espacios y un posible «Bearer » delante (según cómo se haya guardado el PIN)
+  const given = String(req.get('x-owner-token') || '').trim().replace(/^bearer\s+/i, '').trim();
   const ok = given.length === pin.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(pin));
   if (!ok) {
     const n = (f && f.until <= Date.now() ? 0 : (f ? f.n : 0)) + 1;
