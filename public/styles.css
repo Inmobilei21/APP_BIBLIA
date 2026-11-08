@@ -358,3 +358,22 @@ textarea.grow { min-height: 120px; resize: none; line-height: 1.6; }
 body.editing main { padding-bottom: 70vh; }
 .block.writing .actions, .block.writing > .vcomment { display: none; }
 .block.writing .form { margin-top: 8px; }
+
+/* ---------- Peticiones a Claude ---------- */
+.claude-link {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line);
+  background: transparent; text-align: left; font-size: 15px; color: var(--gold-deep); font-weight: 500;
+}
+.claude-link:hover { background: var(--gold-pale); }
+.claude-link svg { width: 18px; height: 18px; fill: var(--gold); stroke: none; }
+#claudeText { min-height: 110px; flex: none; }
+.claude-sub { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin: 18px 0 8px; }
+.claude-list { display: grid; gap: 8px; padding-bottom: 8px; }
+.claude-item { padding: 10px 12px; border-radius: 10px; background: var(--paper-warm); border: 1px solid var(--line); }
+.claude-meta { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-soft); margin-bottom: 4px; }
+.claude-status { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: #eee6d2; color: var(--ink-soft); }
+.claude-status.working { background: #f6e6b4; color: #7a5a00; }
+.claude-status.done { background: #dcefd9; color: #2d6a2d; }
+.claude-status.rejected { background: #f3dcd8; color: var(--danger); }
+.claude-text { font-size: 15px; white-space: pre-wrap; word-wrap: break-word; }
+.claude-reply { font-size: 14px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); white-space: pre-wrap; }

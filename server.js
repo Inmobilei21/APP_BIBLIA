@@ -51,6 +51,23 @@ function makeStore() {
       async deleteComments(ids) { if (ids.length) await pool.query('DELETE FROM comments WHERE id = ANY($1)', [ids]); },
       async deletePosts(ids) { if (ids.length) await pool.query('DELETE FROM posts WHERE id = ANY($1)', [ids]); },
       async deleteSetting(k) { await pool.query('DELETE FROM settings WHERE key=$1', [k]); },
+      async listProposals() {
+        await pool.query(`CREATE TABLE IF NOT EXISTS proposals (
+          id TEXT PRIMARY KEY, text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', reply TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ)`);
+        const { rows } = await pool.query('SELECT * FROM proposals ORDER BY created_at DESC');
+        return rows.map(r => ({ id: r.id, text: r.text, status: r.status, reply: r.reply || '', createdAt: r.created_at, updatedAt: r.updated_at }));
+      },
+      async createProposal(text) {
+        await this.listProposals();   // asegura la tabla
+        const { rows: [r] } = await pool.query('INSERT INTO proposals (id, text) VALUES ($1,$2) RETURNING *', [crypto.randomUUID(), text]);
+        return { id: r.id, text: r.text, status: r.status, reply: '', createdAt: r.created_at, updatedAt: null };
+      },
+      async updateProposal(id, status, reply) {
+        const { rows: [r] } = await pool.query(
+          'UPDATE proposals SET status=$2, reply=COALESCE($3, reply), updated_at=now() WHERE id=$1 RETURNING *', [id, status, reply]);
+        return r ? { id: r.id, text: r.text, status: r.status, reply: r.reply || '', createdAt: r.created_at, updatedAt: r.updated_at } : null;
+      },
       async getSetting(k) {
         const { rows } = await pool.query('SELECT value FROM settings WHERE key=$1', [k]);
         return rows[0] ? rows[0].value : null;
@@ -94,7 +111,10 @@ function makeStore() {
   const postsFile = path.join(path.dirname(file), 'posts.json');
   const settingsFile = path.join(path.dirname(file), 'settings.json');
   const textsFile = path.join(path.dirname(file), 'texts.json');
-  let items = [], posts = [], settings = {}, texts = {};
+  let items = [], posts = [], settings = {}, texts = {}, proposals = null;
+  const proposalsFile = path.join(path.dirname(file), 'proposals.json');
+  const loadProposals = () => { if (!proposals) { try { proposals = JSON.parse(fs.readFileSync(proposalsFile, 'utf8')); } catch { proposals = []; } } return proposals; };
+  const saveProposals = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(proposalsFile, JSON.stringify(proposals, null, 1)); };
   const saveTexts = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(textsFile, JSON.stringify(texts)); };
   const save = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(items, null, 1)); };
   const savePosts = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(postsFile, JSON.stringify(posts, null, 1)); };
@@ -118,6 +138,16 @@ function makeStore() {
     getTextSync(b, c) {
       const d = texts[`${b}:${c}`];
       return Array.isArray(d) ? { name: '', blocks: normalize(d) } : { name: d.name || '', blocks: normalize(d.blocks) };
+    },
+    async listProposals() { return [...loadProposals()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
+    async createProposal(text) {
+      const it = { id: crypto.randomUUID(), text, status: 'pending', reply: '', createdAt: new Date().toISOString(), updatedAt: null };
+      loadProposals().push(it); saveProposals(); return it;
+    },
+    async updateProposal(id, status, reply) {
+      const it = loadProposals().find(x => x.id === id); if (!it) return null;
+      Object.assign(it, { status, updatedAt: new Date().toISOString() }); if (reply != null) it.reply = reply;
+      saveProposals(); return it;
     },
     async deleteComments(ids) { const s = new Set(ids); items = items.filter(x => !s.has(x.id)); save(); },
     async deletePosts(ids) { const s = new Set(ids); posts = posts.filter(x => !s.has(x.id)); savePosts(); },
@@ -177,6 +207,41 @@ function validate(body, partial) {
 
 // ---------- API ----------
 const wrap = fn => (req, res) => fn(req, res).catch(e => { console.error(e); res.status(500).json({ error: 'Error del servidor' }); });
+// ---------- Peticiones de cambios a Claude (protegidas con el PIN de APP_PIN) ----------
+const failures = new Map();   // ip -> { n, until }
+function requirePin(req, res, next) {
+  const pin = process.env.APP_PIN;
+  if (!pin) return res.status(503).json({ error: 'Las peticiones aún no están configuradas' });
+  const ip = req.ip, f = failures.get(ip);
+  if (f && f.until > Date.now()) return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos.' });
+  const given = String(req.get('x-owner-token') || '');
+  const ok = given.length === pin.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(pin));
+  if (!ok) {
+    const n = (f && f.until <= Date.now() ? 0 : (f ? f.n : 0)) + 1;
+    failures.set(ip, { n, until: n >= 8 ? Date.now() + 15 * 60 * 1000 : 0 });
+    return res.status(401).json({ error: 'PIN incorrecto' });
+  }
+  failures.delete(ip); next();
+}
+const STATUSES = ['pending', 'working', 'done', 'rejected'];
+app.get('/api/proposals', requirePin, wrap(async (req, res) => {
+  const list = await store.listProposals();
+  res.json(req.query.status ? list.filter(p => p.status === req.query.status) : list);
+}));
+app.post('/api/proposals', requirePin, wrap(async (req, res) => {
+  const text = String(req.body.text || '').trim();
+  if (!text) return res.status(400).json({ error: 'Escribe lo que quieres cambiar' });
+  if (text.length > 5000) return res.status(400).json({ error: 'Texto demasiado largo' });
+  res.status(201).json(await store.createProposal(text));
+}));
+app.patch('/api/proposals/:id', requirePin, wrap(async (req, res) => {
+  const status = String(req.body.status || '');
+  if (!STATUSES.includes(status)) return res.status(400).json({ error: 'Estado no válido' });
+  const reply = req.body.reply == null ? null : String(req.body.reply).slice(0, 5000);
+  const it = await store.updateProposal(req.params.id, status, reply);
+  it ? res.json(it) : res.status(404).json({ error: 'No encontrada' });
+}));
+
 app.get('/api/health', (req, res) => res.json({ ok: true, storage: store.kind.startsWith('archivo') ? 'file' : 'postgres' }));
 // Marcapáginas «Seguir leyendo»: solo hay uno; el nuevo sustituye al anterior
 app.get('/api/bookmark', wrap(async (req, res) => res.json(await store.getSetting('bookmark'))));

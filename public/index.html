@@ -67,6 +67,10 @@
       <div id="forumIndex" class="section-body" hidden></div>
     </section>
 
+    <button class="claude-link" id="claudeBtn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+      Pedir un cambio a Claude
+    </button>
     <button class="news-link" id="newsBtn">Novedades <span id="appVersion"></span></button>
   </nav>
 
@@ -128,6 +132,32 @@
       <div class="modal-foot">
         <button class="btn ghost" id="editorCancel">Cancelar</button>
         <button class="btn primary" id="editorSave">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-scrim" id="claudeModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="claudeTitle">
+      <div class="modal-head">
+        <h2 id="claudeTitle">Pedir un cambio a Claude</h2>
+        <button class="icon-btn" id="claudeClose" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="claudePinBox" hidden>
+          <p class="editor-help">Escribe el PIN para poder pedir cambios. Este dispositivo lo recordará.</p>
+          <input id="claudePin" class="editor-name" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
+          <div class="form-row"><button class="btn primary" id="claudePinOk">Continuar</button></div>
+        </div>
+        <div id="claudeMain" hidden>
+          <p class="editor-help">Describe qué quieres cambiar o añadir en la app. Claude lo revisa cada hora (de 8:00 a 23:00),
+            lo hace, lo publica y te responde aquí.</p>
+          <textarea id="claudeText" class="grow editor-text" placeholder="Por ejemplo: que el número de versículo sea más grande…"></textarea>
+          <div class="form-row"><button class="btn primary" id="claudeSend">Enviar a Claude</button></div>
+          <h3 class="claude-sub">Tus peticiones</h3>
+          <div id="claudeList" class="claude-list"></div>
+        </div>
       </div>
     </div>
   </div>

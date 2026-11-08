@@ -741,7 +741,8 @@
   $('#chapterTitle').addEventListener('click', () => { openBooks.add(state.book); openDrawer('bibleNav'); });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (!$('#editorModal').hidden) closeEditor();
+      if (!$('#claudeModal').hidden) closeClaude();
+      else if (!$('#editorModal').hidden) closeEditor();
       else if (drawer.classList.contains('open')) closeDrawer();
       else closeActions();
     }
@@ -916,6 +917,59 @@
     setInterval(check, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
   }
+
+  // ---------- Peticiones de cambios a Claude ----------
+  const STATUS = { pending: 'Pendiente', working: 'En curso', done: 'Hecho', rejected: 'No realizado' };
+  const pinApi = (method, url, body) => fetch(url, {
+    method, cache: 'no-store',
+    headers: { 'Content-Type': 'application/json', 'X-Owner-Token': store.get('pin', '') },
+    body: body ? JSON.stringify(body) : undefined,
+  }).then(async r => {
+    const data = r.status === 204 ? null : await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error((data && data.error) || 'Error ' + r.status); e.status = r.status; throw e; }
+    return data;
+  });
+  async function loadProposals() {
+    try {
+      const list = await pinApi('GET', '/api/proposals');
+      $('#claudePinBox').hidden = true; $('#claudeMain').hidden = false;
+      $('#claudeList').innerHTML = list.length ? list.map(p => `
+        <div class="claude-item">
+          <div class="claude-meta"><span class="claude-status ${p.status}">${STATUS[p.status] || p.status}</span><span>${fmtDate(p.createdAt)}</span></div>
+          <div class="claude-text">${esc(p.text)}</div>
+          ${p.reply ? `<div class="claude-reply"><b>Claude:</b> ${esc(p.reply)}</div>` : ''}
+        </div>`).join('') : '<p class="empty">Aún no has pedido ningún cambio.</p>';
+      return true;
+    } catch (e) {
+      if (e.status === 401) { $('#claudeMain').hidden = true; $('#claudePinBox').hidden = false; $('#claudePin').focus(); }
+      else toast(e.message);
+      return false;
+    }
+  }
+  $('#claudeBtn').addEventListener('click', () => {
+    closeDrawer(); $('#claudeModal').hidden = false; lockScroll('claude');
+    $('#claudeMain').hidden = $('#claudePinBox').hidden = true;
+    loadProposals();
+  });
+  const closeClaude = () => { $('#claudeModal').hidden = true; unlockScroll('claude'); };
+  $('#claudeClose').addEventListener('click', closeClaude);
+  $('#claudePinOk').addEventListener('click', async () => {
+    store.set('pin', $('#claudePin').value.trim());
+    if (!(await loadProposals())) toast('PIN incorrecto');
+  });
+  $('#claudePin').addEventListener('keydown', e => { if (e.key === 'Enter') $('#claudePinOk').click(); });
+  $('#claudeSend').addEventListener('click', async () => {
+    const text = $('#claudeText').value.trim();
+    if (!text) return toast('Escribe lo que quieres cambiar');
+    const btn = $('#claudeSend'); btn.disabled = true;
+    try {
+      await pinApi('POST', '/api/proposals', { text });
+      $('#claudeText').value = ''; autosize($('#claudeText'));
+      await loadProposals();
+      toast('Enviado. Claude lo revisará en la próxima hora.');
+    } catch (e) { toast('No se pudo enviar: ' + e.message); }
+    btn.disabled = false;
+  });
 
   for (const [id, d] of [['prevCh', -1], ['prevCh2', -1], ['nextCh', 1], ['nextCh2', 1]])
     $('#' + id).addEventListener('click', () => step(d));
