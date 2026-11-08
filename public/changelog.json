@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "2.5",
+      "date": "2026-11-08",
+      "changes": [
+        "Si dejas un versículo abierto y abres otro, el anterior se cierra y te quedas en el que acabas de abrir (antes la pantalla volvía al primero)."
+      ]
+    },
+    {
       "version": "2.4",
       "date": "2026-11-08",
       "changes": [

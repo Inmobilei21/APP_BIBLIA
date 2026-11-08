@@ -138,9 +138,18 @@
   document.addEventListener('input', e => { if (e.target.matches('textarea.grow')) autosize(e.target); });
   // Al abrir un cuadro de edición: el versículo arriba de la pantalla y el cuadro justo debajo,
   // todo por encima del teclado. Si el versículo es muy largo, se ve su final junto al cuadro.
+  // Lo que mantiene colocado el cuadro que se está escribiendo; se detiene al cerrarlo o al abrir otro
+  let stopPlacing = null;
+  function stopEditing() {
+    if (stopPlacing) { stopPlacing(); stopPlacing = null; }
+    document.body.classList.remove('editing');
+    document.querySelectorAll('.block.writing').forEach(x => x.classList.remove('writing'));
+  }
   function editBelowVerse(ta) {
+    stopEditing();
     const el = ta.closest('.block');
     const place = () => {
+      if (!ta.isConnected || state.active !== el.id) { stopEditing(); return; }
       const header = $('.topbar').offsetHeight, vis = visibleArea();
       const line = parseFloat(getComputedStyle(ta).lineHeight) || 26;
       const minBox = line * 4 + 24;
@@ -158,12 +167,13 @@
     place();
     ta.scrollTop = ta.scrollHeight;   // cursor visible al final del texto
     // el teclado del móvil tarda un momento en aparecer y mueve la página: se recoloca
-    setTimeout(place, 350);
-    if (window.visualViewport) {
-      const onResize = () => place();
-      window.visualViewport.addEventListener('resize', onResize);
-      ta.addEventListener('blur', () => window.visualViewport.removeEventListener('resize', onResize), { once: true });
-    }
+    const timer = setTimeout(place, 350);
+    const vv = window.visualViewport;
+    const onResize = () => place();
+    vv?.addEventListener('resize', onResize);
+    const stop = () => { clearTimeout(timer); vv?.removeEventListener('resize', onResize); ta.removeEventListener('blur', stop); };
+    ta.addEventListener('blur', stop);
+    stopPlacing = stop;
   }
   // Tras cerrar, que el principio del versículo quede a la vista
   function revealTop(el) {
@@ -308,20 +318,25 @@
     if (!state.active) return;
     const el = document.getElementById(state.active);
     state.active = null;
-    document.body.classList.remove('editing');
+    stopEditing();
     if (!el) return;
-    el.classList.remove('writing');
     el.classList.remove('active');
     el.querySelector('.vactions')?.remove();
     revealTop(el);
   }
   function openActions(id, mode) {
-    if (state.active) {
-      const prev = document.getElementById(state.active);
-      prev?.classList.remove('active'); prev?.querySelector('.vactions')?.remove();
-      state.active = null;
-    }
     const el = document.getElementById(id); if (!el) return;
+    if (state.active) {
+      // Se cierra el que estaba abierto sin mover de sitio el que se acaba de tocar
+      const before = el.getBoundingClientRect().top;
+      const prev = document.getElementById(state.active);
+      state.active = null;
+      stopEditing();
+      if (document.activeElement && prev?.contains(document.activeElement)) document.activeElement.blur();
+      prev?.classList.remove('active'); prev?.querySelector('.vactions')?.remove();
+      const shift = el.getBoundingClientRect().top - before;
+      if (shift) window.scrollBy(0, shift);
+    }
     const { v, tg } = infoOf(el);
     state.active = id;
     el.classList.add('active');
@@ -378,9 +393,8 @@
       indexComments(); refreshExtras(el); renderCommentIndex();
       box.querySelector('[data-act="comment"]').lastChild.textContent = 'Editar comentario';
       box.querySelector('.slot').innerHTML = '';
+      stopEditing();
       document.activeElement?.blur();
-      document.body.classList.remove('editing');
-      el.classList.remove('writing');
       revealTop(el);
       toast('Comentario guardado');
     } catch (e) {
