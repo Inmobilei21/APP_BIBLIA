@@ -208,16 +208,17 @@ function validate(body, partial) {
 
 // ---------- API ----------
 const wrap = fn => (req, res) => fn(req, res).catch(e => { console.error(e); res.status(500).json({ error: 'Error del servidor' }); });
-// ---------- Peticiones de cambios a Claude (protegidas con el PIN de APP_PIN) ----------
+// ---------- Peticiones de cambios a Claude (PIN APP_PIN para el usuario, CLAUDE_TOKEN para Claude) ----------
 const failures = new Map();   // ip -> { n, until }
 function requirePin(req, res, next) {
   const pin = process.env.APP_PIN;
   if (!pin) return res.status(503).json({ error: 'Las peticiones aún no están configuradas' });
   const ip = req.ip, f = failures.get(ip);
   if (f && f.until > Date.now()) return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos.' });
-  // se ignoran espacios y un posible «Bearer » delante (según cómo se haya guardado el PIN)
-  const given = String(req.get('x-owner-token') || '').trim().replace(/^bearer\s+/i, '').trim();
-  const ok = given.length === pin.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(pin));
+  const same = (a, b) => !!a && !!b && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  // PIN del usuario (desde la app) o clave propia de las sesiones automáticas de Claude (CLAUDE_TOKEN)
+  const given = String(req.get('x-owner-token') || '').trim();
+  const ok = same(given, pin) || same(String(req.get('x-claude-token') || '').trim(), process.env.CLAUDE_TOKEN || '');
   if (!ok) {
     const n = (f && f.until <= Date.now() ? 0 : (f ? f.n : 0)) + 1;
     failures.set(ip, { n, until: n >= 8 ? Date.now() + 15 * 60 * 1000 : 0 });
@@ -225,12 +226,6 @@ function requirePin(req, res, next) {
   }
   failures.delete(ip); next();
 }
-// TEMPORAL: diagnóstico de la cabecera del PIN (no revela el valor)
-app.get('/api/pin-debug', (req, res) => {
-  const raw = String(req.get('x-owner-token') || '');
-  res.json({ present: !!raw, len: raw.length, onlyDigits: /^\d+$/.test(raw), expectedLen: (process.env.APP_PIN || '').length,
-    authHeader: !!req.get('authorization') });
-});
 const STATUSES = ['pending', 'working', 'done', 'rejected'];
 app.get('/api/proposals', requirePin, wrap(async (req, res) => {
   const list = await store.listProposals();
