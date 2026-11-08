@@ -116,13 +116,39 @@
   function autosize(ta) {
     const cs = getComputedStyle(ta);
     const line = parseFloat(cs.lineHeight) || 26;
-    const max = line * 20 + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + 2;
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + 2;
+    let max = line * 20 + pad;
+    // Con el teclado abierto, que el cuadro y los botones quepan en el hueco visible
+    if (document.activeElement === ta && window.visualViewport) {
+      const avail = window.visualViewport.height - $('.topbar').offsetHeight - 90;
+      max = Math.min(max, Math.max(line * 4 + pad, avail));
+    }
     ta.style.height = 'auto';
     const h = Math.min(ta.scrollHeight + 2, max);
     ta.style.height = h + 'px';
     ta.style.overflowY = ta.scrollHeight + 2 > max ? 'auto' : 'hidden';
   }
   document.addEventListener('input', e => { if (e.target.matches('textarea.grow')) autosize(e.target); });
+  // Al abrir un cuadro de edición: subirlo a la parte de arriba de la pantalla, por encima del teclado
+  function editAtTop(ta) {
+    const place = () => {
+      autosize(ta);
+      const header = $('.topbar').offsetHeight;
+      window.scrollTo(0, window.scrollY + ta.getBoundingClientRect().top - header - 12);
+    };
+    document.body.classList.add('editing');   // espacio extra al final para poder subir el cuadro
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    place();
+    ta.scrollTop = ta.scrollHeight;   // cursor visible al final del texto
+    // el teclado del móvil tarda un momento en aparecer y mueve la página: se recoloca
+    setTimeout(place, 350);
+    if (window.visualViewport) {
+      const onResize = () => place();
+      window.visualViewport.addEventListener('resize', onResize);
+      ta.addEventListener('blur', () => window.visualViewport.removeEventListener('resize', onResize), { once: true });
+    }
+  }
   // Tras cerrar, que el principio del versículo quede a la vista
   function revealTop(el) {
     const header = $('.topbar').offsetHeight;
@@ -266,6 +292,7 @@
     if (!state.active) return;
     const el = document.getElementById(state.active);
     state.active = null;
+    document.body.classList.remove('editing');
     if (!el) return;
     el.classList.remove('active');
     el.querySelector('.vactions')?.remove();
@@ -315,11 +342,9 @@
         <textarea class="ctext grow" placeholder="Escribe aquí tu comentario…" aria-label="Comentario">${existing ? esc(existing.text) : ''}</textarea>
         <div class="form-row">${commentRow(existing)}</div>
       </div>`;
-    const ta = box.querySelector('textarea');
-    autosize(ta);
-    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    editAtTop(box.querySelector('textarea'));
   }
-  // Guardar no cierra: el comentario se actualiza y se puede seguir escribiendo
+  // Al guardar se cierra el cuadro de edición: queda el comentario y las opciones (con «Editar comentario»)
   async function saveComment(box) {
     const el = activeEl(); const { v, tg } = infoOf(el);
     const text = box.querySelector('.ctext').value.trim();
@@ -335,7 +360,10 @@
       }
       indexComments(); refreshExtras(el); renderCommentIndex();
       box.querySelector('[data-act="comment"]').lastChild.textContent = 'Editar comentario';
-      box.querySelector('.form-row').innerHTML = commentRow(true);
+      box.querySelector('.slot').innerHTML = '';
+      document.activeElement?.blur();
+      document.body.classList.remove('editing');
+      revealTop(el);
       toast('Comentario guardado');
     } catch (e) {
       btn.disabled = false;
@@ -367,7 +395,7 @@
           <button class="btn primary" data-act="save-text">Guardar texto</button>
         </div>
       </div>`;
-    const ta = box.querySelector('textarea'); autosize(ta); ta.focus();
+    editAtTop(box.querySelector('textarea'));
   }
   async function saveText(box) {
     const el = activeEl(); const { v } = infoOf(el);

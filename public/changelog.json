@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "2.3",
+      "date": "2026-11-08",
+      "changes": [
+        "Al guardar un comentario se cierra el cuadro de edición: queda el comentario a la vista con la opción «Editar comentario».",
+        "Al abrir el cuadro para escribir, sube a la parte de arriba de la pantalla para que el teclado no lo tape."
+      ]
+    },
+    {
       "version": "2.2",
       "date": "2026-11-08",
       "changes": [
