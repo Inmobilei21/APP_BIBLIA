@@ -966,7 +966,7 @@
       await pinApi('POST', '/api/proposals', { text });
       $('#claudeText').value = ''; autosize($('#claudeText'));
       await loadProposals();
-      toast('Enviado. Claude lo revisará en la próxima hora.');
+      toast('Enviado. Claude se pone a ello ahora mismo.');
     } catch (e) { toast('No se pudo enviar: ' + e.message); }
     btn.disabled = false;
   });

@@ -45,5 +45,5 @@ Añade una entrada al principio de `public/changelog.json` con un número de ver
 
 ## Peticiones a Claude
 El botón «Pedir un cambio a Claude» del menú lateral (protegido con PIN) guarda lo que escribe el usuario como petición pendiente.
-Una tarea programada despierta a Claude cada hora, de 8:00 a 23:00 (hora de España): hace el cambio, lo publica en `main`
+Al enviarla, el servidor despierta a Claude con el activador por API de su tarea (`ROUTINE_FIRE_URL`, `ROUTINE_FIRE_TOKEN`): hace el cambio, lo publica en `main`
 y responde en la propia petición. Se rechazan las que piden borrar datos, tocar el PIN o las claves, o salir de la app.

@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "2.7",
+      "date": "2026-11-08",
+      "changes": [
+        "«Pedir un cambio a Claude» ya no espera a ninguna hora: al enviar la petición, Claude se pone a ello al momento."
+      ]
+    },
+    {
       "version": "2.6",
       "date": "2026-11-08",
       "changes": [

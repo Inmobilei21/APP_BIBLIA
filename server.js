@@ -227,6 +227,26 @@ function requirePin(req, res, next) {
   failures.delete(ip); next();
 }
 const STATUSES = ['pending', 'working', 'done', 'rejected'];
+// Despierta a Claude al momento: llama al activador por API de la tarea de Claude Code
+// (variables ROUTINE_FIRE_URL y ROUTINE_FIRE_TOKEN, que se obtienen en claude.ai/code/routines)
+async function wakeClaude(p) {
+  const url = process.env.ROUTINE_FIRE_URL, token = process.env.ROUTINE_FIRE_TOKEN;
+  if (!url || !token) { console.warn('Petición guardada, pero falta ROUTINE_FIRE_URL / ROUTINE_FIRE_TOKEN para avisar a Claude'); return; }
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'anthropic-beta': 'experimental-cc-routine-2026-04-01',
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: `Nueva petición en la app: ${p.id}` }),
+    });
+    if (!r.ok) console.error('Aviso a Claude fallido:', r.status, (await r.text()).slice(0, 300));
+    else console.log('Claude avisado de la petición', p.id);
+  } catch (e) { console.error('Aviso a Claude fallido:', e.message); }
+}
 app.get('/api/proposals', requirePin, wrap(async (req, res) => {
   const list = await store.listProposals();
   res.json(req.query.status ? list.filter(p => p.status === req.query.status) : list);
@@ -235,7 +255,14 @@ app.post('/api/proposals', requirePin, wrap(async (req, res) => {
   const text = String(req.body.text || '').trim();
   if (!text) return res.status(400).json({ error: 'Escribe lo que quieres cambiar' });
   if (text.length > 5000) return res.status(400).json({ error: 'Texto demasiado largo' });
-  res.status(201).json(await store.createProposal(text));
+  const p = await store.createProposal(text);
+  res.status(201).json(p);
+  wakeClaude(p);   // sin esperar: el usuario no tiene que aguardar a la respuesta
+}));
+app.post('/api/proposals/:id/wake', requirePin, wrap(async (req, res) => {
+  const p = (await store.listProposals()).find(x => x.id === req.params.id);
+  if (!p) return res.status(404).json({ error: 'No encontrada' });
+  await wakeClaude(p); res.status(204).end();
 }));
 app.patch('/api/proposals/:id', requirePin, wrap(async (req, res) => {
   const status = String(req.body.status || '');
