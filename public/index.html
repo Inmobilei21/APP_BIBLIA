@@ -114,8 +114,14 @@
         </button>
       </div>
       <div class="modal-body">
-        <p class="editor-help">Pega o escribe el texto. Cada versículo empieza por su número
-          (por ejemplo <code>1 Puesto que muchos…</code>). Para un título de sección, escribe una línea que empiece por <code>#</code>.</p>
+        <label class="editor-label" for="editorName">Nombre del capítulo <span>(opcional)</span></label>
+        <input id="editorName" class="editor-name" type="text" maxlength="150" placeholder="Por ejemplo: Infancia de Juan y de Jesús">
+        <p class="editor-help">
+          Cada versículo empieza por su número: <code>46 Y María dijo…</code>. Para separar dos versículos unidos,
+          pon el número al principio de una línea nueva (se admiten saltos en la numeración).<br>
+          <code># Prólogo</code> → subtítulo tuyo, se puede comentar.<br>
+          <code>I. Nacimiento y vida oculta…</code> → división del propio texto (líneas que empiezan por I., II., III.…).
+        </p>
         <textarea id="editorText" class="editor-text" spellcheck="false" placeholder="# Prólogo&#10;1 Puesto que muchos han intentado…&#10;2 tal como nos lo transmitieron…"></textarea>
         <p class="editor-status" id="editorStatus"></p>
       </div>

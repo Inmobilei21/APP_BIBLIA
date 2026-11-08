@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { normalize, targets } = require('./lib-blocks');
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -13,7 +14,7 @@ function makeStore() {
     const { Pool } = require('pg');
     const ssl = /localhost|\.railway\.internal/.test(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false };
     const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl });
-    const row = r => ({ id: r.id, book: r.book, chapter: r.chapter, verse: r.verse, author: r.author,
+    const row = r => ({ id: r.id, book: r.book, chapter: r.chapter, verse: r.verse, target: r.target || '', author: r.author,
       text: r.text, createdAt: r.created_at, updatedAt: r.updated_at });
     return {
       kind: 'postgres',
@@ -31,19 +32,24 @@ function makeStore() {
         await pool.query(`CREATE TABLE IF NOT EXISTS texts (
           book INT NOT NULL, chapter INT NOT NULL, verses JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           PRIMARY KEY (book, chapter))`);
+        await pool.query('ALTER TABLE texts ADD COLUMN IF NOT EXISTS name TEXT');
+        await pool.query("ALTER TABLE comments ADD COLUMN IF NOT EXISTS target TEXT NOT NULL DEFAULT ''");
       },
       async getText(b, c) {
-        const { rows } = await pool.query('SELECT verses FROM texts WHERE book=$1 AND chapter=$2', [b, c]);
-        return rows[0] ? rows[0].verses : [];
+        const { rows } = await pool.query('SELECT verses, name FROM texts WHERE book=$1 AND chapter=$2', [b, c]);
+        return rows[0] ? { name: rows[0].name || '', blocks: normalize(rows[0].verses) } : { name: '', blocks: [] };
       },
-      async setText(b, c, verses) {
-        await pool.query(`INSERT INTO texts (book, chapter, verses) VALUES ($1,$2,$3)
-          ON CONFLICT (book, chapter) DO UPDATE SET verses = EXCLUDED.verses, updated_at = now()`, [b, c, JSON.stringify(verses)]);
+      async setText(b, c, doc) {
+        await pool.query(`INSERT INTO texts (book, chapter, verses, name) VALUES ($1,$2,$3,$4)
+          ON CONFLICT (book, chapter) DO UPDATE SET verses = EXCLUDED.verses, name = EXCLUDED.name, updated_at = now()`,
+          [b, c, JSON.stringify(doc.blocks), doc.name || null]);
       },
-      async textSummary() {
-        const { rows } = await pool.query('SELECT book, chapter, jsonb_array_length(verses) AS n FROM texts');
-        return Object.fromEntries(rows.filter(r => r.n > 0).map(r => [`${r.book}:${r.chapter}`, r.n]));
+      async allTexts() {
+        const { rows } = await pool.query('SELECT book, chapter, verses, name FROM texts');
+        return rows.map(r => ({ book: r.book, chapter: r.chapter, name: r.name || '', blocks: normalize(r.verses) }));
       },
+      async deleteComments(ids) { if (ids.length) await pool.query('DELETE FROM comments WHERE id = ANY($1)', [ids]); },
+      async deletePosts(ids) { if (ids.length) await pool.query('DELETE FROM posts WHERE id = ANY($1)', [ids]); },
       async deleteSetting(k) { await pool.query('DELETE FROM settings WHERE key=$1', [k]); },
       async getSetting(k) {
         const { rows } = await pool.query('SELECT value FROM settings WHERE key=$1', [k]);
@@ -69,8 +75,8 @@ function makeStore() {
       },
       async create(c) {
         const { rows } = await pool.query(
-          'INSERT INTO comments (id, book, chapter, verse, author, text) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-          [crypto.randomUUID(), c.book, c.chapter, c.verse, c.author, c.text]);
+          'INSERT INTO comments (id, book, chapter, verse, target, author, text) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+          [crypto.randomUUID(), c.book, c.chapter, c.verse, c.target, c.author, c.text]);
         return row(rows[0]);
       },
       async update(id, c) {
@@ -100,11 +106,21 @@ function makeStore() {
       try { settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch { settings = {}; }
       try { texts = JSON.parse(fs.readFileSync(textsFile, 'utf8')); } catch { texts = {}; }
     },
-    async getText(b, c) { return texts[`${b}:${c}`] || []; },
-    async setText(b, c, verses) { texts[`${b}:${c}`] = verses; saveTexts(); },
-    async textSummary() {
-      return Object.fromEntries(Object.entries(texts).filter(([, v]) => v.length).map(([k, v]) => [k, v.length]));
+    async getText(b, c) {
+      const d = texts[`${b}:${c}`];
+      if (!d) return { name: '', blocks: [] };
+      return Array.isArray(d) ? { name: '', blocks: normalize(d) } : { name: d.name || '', blocks: normalize(d.blocks) };
     },
+    async setText(b, c, doc) { texts[`${b}:${c}`] = { name: doc.name || '', blocks: doc.blocks }; saveTexts(); },
+    async allTexts() {
+      return Object.keys(texts).map(k => { const [book, chapter] = k.split(':').map(Number); return { book, chapter, ...this.getTextSync(book, chapter) }; });
+    },
+    getTextSync(b, c) {
+      const d = texts[`${b}:${c}`];
+      return Array.isArray(d) ? { name: '', blocks: normalize(d) } : { name: d.name || '', blocks: normalize(d.blocks) };
+    },
+    async deleteComments(ids) { const s = new Set(ids); items = items.filter(x => !s.has(x.id)); save(); },
+    async deletePosts(ids) { const s = new Set(ids); posts = posts.filter(x => !s.has(x.id)); savePosts(); },
     async deleteSetting(k) {
       delete settings[k];
       fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(settingsFile, JSON.stringify(settings));
@@ -124,7 +140,7 @@ function makeStore() {
         || a.createdAt.localeCompare(b.createdAt));
     },
     async create(c) {
-      const it = { id: crypto.randomUUID(), ...c, createdAt: new Date().toISOString(), updatedAt: null };
+      const it = { id: crypto.randomUUID(), ...c, target: c.target || '', createdAt: new Date().toISOString(), updatedAt: null };
       items.push(it); save(); return it;
     },
     async update(id, c) {
@@ -154,7 +170,9 @@ function validate(body, partial) {
   if (partial) return { author, text };
   const book = Number(body.book), chapter = Number(body.chapter), verse = Number(body.verse);
   if (!validRef(book, chapter, verse)) return { error: 'Referencia bíblica no válida' };
-  return { book, chapter, verse, author, text };
+  const target = String(body.target || '');
+  if (target && !/^t\d{1,2}$/.test(target)) return { error: 'Referencia no válida' };
+  return { book, chapter, verse, target, author, text };
 }
 
 // ---------- API ----------
@@ -172,40 +190,67 @@ app.put('/api/bookmark', wrap(async (req, res) => {
 app.delete('/api/bookmark', wrap(async (req, res) => { await store.deleteSetting('bookmark'); res.status(204).end(); }));
 
 // ---------- Texto de los libros (lo escribe el propietario) ----------
-// Cada capítulo: [{ n, text, title? }] — title es un encabezado opcional antes del versículo
-function cleanVerses(list) {
-  if (!Array.isArray(list) || list.length > MAX_VERSE) return null;
+function cleanBlocks(list) {
+  if (!Array.isArray(list) || list.length > MAX_VERSE * 2) return null;
   const seen = new Set(), out = [];
-  for (const v of list) {
-    const n = Number(v && v.n), text = String((v && v.text) || '').trim(), title = String((v && v.title) || '').trim();
-    if (!Number.isInteger(n) || n < 1 || n > MAX_VERSE || seen.has(n) || !text || text.length > 5000 || title.length > 200) return null;
-    seen.add(n); out.push(title ? { n, text, title } : { n, text });
+  for (const b of list) {
+    const t = b && b.t, text = String((b && b.text) || '').trim();
+    if (!text || text.length > 5000 || !['v', 'h', 'd'].includes(t)) return null;
+    if (t === 'v') {
+      const n = Number(b.n);
+      if (!Number.isInteger(n) || n < 1 || n > MAX_VERSE || seen.has(n)) return null;
+      seen.add(n); out.push({ t, n, text });
+    } else {
+      if (text.length > 300) return null;
+      out.push({ t, text });
+    }
   }
-  return out.sort((a, b) => a.n - b.n);
+  return out;
 }
 const refParams = req => ({ b: Number(req.params.b), c: Number(req.params.c) });
-app.get('/api/text-summary', wrap(async (req, res) => res.json(await store.textSummary())));
+// Qué existe en cada capítulo: versículos, subtítulos/divisiones y nombre
+app.get('/api/text-summary', wrap(async (req, res) => {
+  const out = {};
+  for (const d of await store.allTexts()) {
+    if (!d.blocks.length && !d.name) continue;
+    out[`${d.book}:${d.chapter}`] = { name: d.name, verses: d.blocks.filter(x => x.t === 'v').map(x => x.n), targets: targets(d.blocks) };
+  }
+  res.json(out);
+}));
 app.get('/api/text/:b/:c', wrap(async (req, res) => {
   const { b, c } = refParams(req); if (!validRef(b, c)) return res.status(404).json({ error: 'No existe' });
-  res.json({ verses: await store.getText(b, c) });
+  res.json(await store.getText(b, c));
 }));
 app.put('/api/text/:b/:c', wrap(async (req, res) => {
   const { b, c } = refParams(req); if (!validRef(b, c)) return res.status(404).json({ error: 'No existe' });
-  const verses = cleanVerses(req.body.verses);
-  if (!verses) return res.status(400).json({ error: 'Texto no válido: revisa la numeración de los versículos' });
-  await store.setText(b, c, verses);
-  res.json({ verses });
+  const blocks = cleanBlocks(req.body.blocks);
+  if (!blocks) return res.status(400).json({ error: 'Texto no válido: revisa la numeración de los versículos' });
+  const name = String(req.body.name || '').trim().slice(0, 150);
+  await store.setText(b, c, { name, blocks });
+  // Opcional: borrar comentarios y mensajes de textos que ya no existen en este capítulo
+  let purged = 0;
+  if (req.body.purge) {
+    const verses = new Set(blocks.filter(x => x.t === 'v').map(x => x.n)), tks = new Set(targets(blocks));
+    const alive = x => x.target ? tks.has(`${x.verse}:${x.target}`) : verses.has(x.verse);
+    const here = x => x.book === b && x.chapter === c;
+    const dc = (await store.list()).filter(x => here(x) && !alive(x)).map(x => x.id);
+    const dp = (await store.listPosts()).filter(x => here(x) && !verses.has(x.verse)).map(x => x.id);
+    await store.deleteComments(dc); await store.deletePosts(dp);
+    const bm = await store.getSetting('bookmark');
+    if (bm && bm.book === b && bm.chapter === c && !verses.has(bm.verse)) await store.deleteSetting('bookmark');
+    purged = dc.length + dp.length;
+  }
+  res.json({ name, blocks, purged });
 }));
 app.put('/api/text/:b/:c/:n', wrap(async (req, res) => {
   const { b, c } = refParams(req), n = Number(req.params.n);
   if (!validRef(b, c, n)) return res.status(404).json({ error: 'No existe' });
   const text = String(req.body.text || '').trim();
   if (!text || text.length > 5000) return res.status(400).json({ error: 'El texto está vacío' });
-  const verses = await store.getText(b, c);
-  const v = verses.find(x => x.n === n); if (!v) return res.status(404).json({ error: 'Versículo no encontrado' });
+  const doc = await store.getText(b, c);
+  const v = doc.blocks.find(x => x.t === 'v' && x.n === n); if (!v) return res.status(404).json({ error: 'Versículo no encontrado' });
   v.text = text;
-  if ('title' in req.body) { const t = String(req.body.title || '').trim().slice(0, 200); if (t) v.title = t; else delete v.title; }
-  await store.setText(b, c, verses);
+  await store.setText(b, c, doc);
   res.json(v);
 }));
 app.get('/api/posts', wrap(async (req, res) => res.json(await store.listPosts())));

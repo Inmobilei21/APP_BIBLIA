@@ -1,6 +1,20 @@
 {
   "versions": [
     {
+      "version": "2.2",
+      "date": "2026-11-08",
+      "changes": [
+        "Comentarios también en los subtítulos y en las divisiones del texto.",
+        "Las líneas que empiezan por «I.», «II.», «III.»… quedan como parte del evangelio (centradas), sin marcarse como versículo.",
+        "Cada subtítulo «#» va en su propia línea: ya no se unen dos seguidos.",
+        "Nombre para cada capítulo, visible en la cabecera y en el menú.",
+        "Separar versículos unidos: pon el número al principio de una línea nueva. Se admiten saltos en la numeración y el editor avisa de huecos y posibles uniones.",
+        "Los comentarios y discusiones de textos eliminados ya no aparecen; al guardar el capítulo puedes borrarlos.",
+        "El cuadro de comentario crece mientras escribes (hasta unas 20 líneas).",
+        "Guardar un comentario ya no lo cierra; al cerrarlo vuelves al principio del versículo."
+      ]
+    },
+    {
       "version": "2.1",
       "date": "2026-11-06",
       "changes": [

@@ -5,9 +5,14 @@ App para leer y comentar los libros de cabecera: **Evangelio según Lucas** (par
 
 ## Funciones
 - **Texto propio**: en un capítulo vacío, «Añadir el texto del capítulo»; después, «Editar capítulo» al pie.
-  Cada versículo empieza por su número (`1 …`, `2 …`; también superíndices o un número por línea).
-  Las líneas que empiezan por `#` son títulos de sección. Un versículo suelto se corrige con «Editar texto».
-- **Comentarios**: uno por versículo, ocultos; un punto dorado en la esquina indica que existe y aparece al pulsar el versículo.
+  Cada capítulo puede tener un **nombre**. En el editor:
+  - una línea que empieza por un número abre ese versículo (se admiten saltos); dentro de una línea, el número siguiente también;
+  - `# Texto` → subtítulo propio (comentable);
+  - `I. Texto`, `II. Texto`… → división del propio evangelio (comentable, no se marca como versículo).
+  El editor avisa de huecos en la numeración y de posibles versículos unidos. Un versículo suelto se corrige con «Editar texto».
+- **Comentarios**: uno por versículo, subtítulo o división, ocultos; un punto dorado indica que existe y aparece al pulsar.
+  El cuadro crece al escribir; guardar no lo cierra; al cerrar se vuelve al principio del versículo.
+  Los comentarios y mensajes de textos eliminados se ocultan, y al guardar el capítulo se pueden borrar.
 - **Marcar aquí / Quitar marca**: cinta roja de misal; «Seguir leyendo», al principio del menú, lleva a ella.
 - **Discusión**: foro por versículo (nombre, fecha y mensaje).
 - **Menú lateral** (botón o deslizando a la derecha): Seguir leyendo · Libros (desplegables → capítulos) ·
@@ -25,10 +30,10 @@ Sin `DATABASE_URL`, los datos se guardan en `data/`. En Railway, con PostgreSQL 
 ## API
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET / PUT | `/api/text/:libro/:cap` | Texto del capítulo `{verses: [{n, text, title?}]}` |
+| GET / PUT | `/api/text/:libro/:cap` | Capítulo `{name, blocks: [{t:'v',n,text} \| {t:'h',text} \| {t:'d',text}]}`; PUT admite `purge` |
 | PUT | `/api/text/:libro/:cap/:n` | Texto de un versículo `{text}` |
 | GET | `/api/text-summary` | Capítulos con texto |
-| GET / POST | `/api/comments` | Comentarios `{book, chapter, verse, text}` |
+| GET / POST | `/api/comments` | Comentarios `{book, chapter, verse, target?, text}` (target `t0`… = subtítulo antes del versículo) |
 | PUT / DELETE | `/api/comments/:id` | Editar `{text}` / borrar |
 | GET / PUT / DELETE | `/api/bookmark` | Marca «Seguir leyendo» |
 | GET / POST | `/api/posts` | Discusión `{book, chapter, verse, name, text}` |

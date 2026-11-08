@@ -14,21 +14,42 @@
     ribbon: '<svg viewBox="0 0 24 24" class="ribbon-ico"><path d="M7 1h10v22l-5-5.5L7 23z"/></svg>',
     forum: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   };
+  const ROMAN = /^\s*(?:[IVX]{1,5})\.\s+\S/;   // «I. …», «II. …»: divisiones del propio texto
 
   const state = {
     books: [],              // [{ id, part, name, short, chapters }]
-    texts: new Map(),       // "libro:cap" -> [{ n, text, title? }]
-    summary: {},            // "libro:cap" -> nº de versículos con texto
+    texts: new Map(),       // "libro:cap" -> { name, blocks: [{t:'v',n,text}|{t:'h',text}|{t:'d',text}] }
+    summary: {},            // "libro:cap" -> { name, verses: [n…], targets: ["5:t0"…] }
     comments: [], byRef: new Map(),
     posts: [], postsByRef: new Map(),
     book: 0, chapter: 1,
-    active: null,           // versículo abierto
-    pendingOpen: null,      // { v, mode } para abrir tras navegar
+    active: null,           // id del elemento abierto («v12», «t5-0»)
+    pendingOpen: null,      // { id, mode } para abrir tras navegar
     bookmark: null,         // { book, chapter, verse } — «Seguir leyendo»
   };
-  const key = (b, c, v) => `${b}:${c}:${v}`;
+  // Clave de un comentario: versículo (tg '') o subtítulo/división antes del versículo v (tg 't0', 't1'…)
+  const key = (b, c, v, tg = '') => `${b}:${c}:${v}:${tg}`;
   const bookOf = id => state.books.find(b => b.id === id);
   const refLabel = (b, c, v) => `${bookOf(b).short} ${c}:${v}`;
+
+  // Subtítulos y divisiones: se identifican por el versículo siguiente y su orden
+  function withTargets(blocks) {
+    const out = []; let pending = [], last = 0;
+    for (const b of blocks) {
+      if (b.t === 'v') {
+        pending.forEach((p, i) => out.push({ ...p, v: b.n, tg: `t${i}` }));
+        pending = []; last = b.n; out.push({ ...b, v: b.n, tg: '' });
+      } else pending.push(b);
+    }
+    pending.forEach((p, i) => out.push({ ...p, v: last + 1, tg: `t${i}` }));
+    return out;
+  }
+  // ¿Sigue existiendo el texto al que apunta un comentario o mensaje?
+  function alive(b, c, v, tg) {
+    const s = state.summary[`${b}:${c}`];
+    if (!s) return false;
+    return tg ? s.targets.includes(`${v}:${tg}`) : s.verses.includes(v);
+  }
 
   // ---------- Bloqueo del desplazamiento del fondo (menú y ventanas abiertas) ----------
   const locks = new Set(); let lockedY = 0;
@@ -59,13 +80,13 @@
   }
   async function loadChapter(b, c, force) {
     const k = `${b}:${c}`;
-    if (force || !state.texts.has(k)) state.texts.set(k, (await api('GET', `/api/text/${b}/${c}`)).verses);
+    if (force || !state.texts.has(k)) state.texts.set(k, await api('GET', `/api/text/${b}/${c}`));
     return state.texts.get(k);
   }
   function group(list) {
     const m = new Map();
     for (const c of list) {
-      const k = key(c.book, c.chapter, c.verse);
+      const k = key(c.book, c.chapter, c.verse, c.target || '');
       if (!m.has(k)) m.set(k, []);
       m.get(k).push(c);
     }
@@ -91,6 +112,23 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
   }
   const fmtDate = iso => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  // Cuadro de texto que crece al escribir, hasta unas 20 líneas visibles
+  function autosize(ta) {
+    const cs = getComputedStyle(ta);
+    const line = parseFloat(cs.lineHeight) || 26;
+    const max = line * 20 + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + 2;
+    ta.style.height = 'auto';
+    const h = Math.min(ta.scrollHeight + 2, max);
+    ta.style.height = h + 'px';
+    ta.style.overflowY = ta.scrollHeight + 2 > max ? 'auto' : 'hidden';
+  }
+  document.addEventListener('input', e => { if (e.target.matches('textarea.grow')) autosize(e.target); });
+  // Tras cerrar, que el principio del versículo quede a la vista
+  function revealTop(el) {
+    const header = $('.topbar').offsetHeight;
+    const top = el.getBoundingClientRect().top;
+    if (top < header + 4 || top > window.innerHeight * 0.6) window.scrollTo(0, window.scrollY + top - header - 12);
+  }
 
   // ---------- Navegación ----------
   function parseHash() {
@@ -122,25 +160,26 @@
     state.book = r.b; state.chapter = r.c;
     store.set('last', { b: r.b, c: r.c });
     if (changed) { await renderChapter(); window.scrollTo(0, 0); }
-    if (r.v) {
-      const el = document.getElementById(`v${r.v}`);
-      if (el) {
-        el.scrollIntoView({ block: 'center', behavior: changed ? 'auto' : 'smooth' });
-        el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
-        if (state.pendingOpen && state.pendingOpen.v === r.v) openActions(r.v, state.pendingOpen.mode);
-      }
+    const target = state.pendingOpen ? document.getElementById(state.pendingOpen.id) : r.v ? document.getElementById(`v${r.v}`) : null;
+    if (target) {
+      target.scrollIntoView({ block: 'center', behavior: changed ? 'auto' : 'smooth' });
+      target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
+      if (state.pendingOpen) openActions(target.id, state.pendingOpen.mode);
     }
     state.pendingOpen = null;
   }
 
   // ---------- Lector ----------
-  const chapterVerses = () => state.texts.get(`${state.book}:${state.chapter}`) || [];
-  const verseText = v => (chapterVerses().find(x => x.n === v) || {}).text || '';
+  const chapterDoc = () => state.texts.get(`${state.book}:${state.chapter}`) || { name: '', blocks: [] };
+  const verseText = v => (chapterDoc().blocks.find(x => x.t === 'v' && x.n === v) || {}).text || '';
 
   async function renderChapter() {
     const { book: b, chapter: c } = state;
     const book = bookOf(b);
-    $('#chapterTitle').innerHTML = `<small>${esc(book.name)}</small>Capítulo ${c}`;
+    const setTitle = name => {
+      $('#chapterTitle').innerHTML = `<small>${esc(book.name)}</small>Capítulo ${c}${name ? `<span class="ch-name">${esc(name)}</span>` : ''}`;
+    };
+    setTitle(state.summary[`${b}:${c}`]?.name);
     document.title = `${book.short} ${c} · Evangelio`;
     const first = state.books[0], last = state.books[state.books.length - 1];
     for (const id of ['prevCh', 'prevCh2']) $('#' + id).disabled = b === first.id && c === 1;
@@ -148,39 +187,47 @@
     const wrap = $('#verses');
     wrap.innerHTML = '<p class="loading">Cargando…</p>';
     state.active = null;
-    let verses;
-    try { verses = await loadChapter(b, c); } catch { wrap.innerHTML = '<p class="loading">No se pudo cargar el texto. Revisa la conexión.</p>'; return; }
+    let doc;
+    try { doc = await loadChapter(b, c); } catch { wrap.innerHTML = '<p class="loading">No se pudo cargar el texto. Revisa la conexión.</p>'; return; }
     if (state.book !== b || state.chapter !== c) return; // el usuario ya navegó a otro sitio
-    $('#editChapterBtn').hidden = !verses.length;
-    if (!verses.length) {
+    setTitle(doc.name);
+    $('#editChapterBtn').hidden = !doc.blocks.length;
+    if (!doc.blocks.length) {
       wrap.innerHTML = `<div class="empty-chapter">
         <p>Este capítulo aún no tiene texto.</p>
         <button class="btn primary" data-act="add-text">Añadir el texto del capítulo</button>
       </div>`;
       return;
     }
-    wrap.innerHTML = verses.map(v => `
-      ${v.title ? `<h3 class="section-title">${esc(v.title)}</h3>` : ''}
-      <section class="verse" id="v${v.n}" data-v="${v.n}" tabindex="0" aria-label="Versículo ${v.n}">
-        ${ribbonHtml(b, c, v.n)}<span class="vnum">${v.n}</span><span class="vtext">${esc(v.text)}</span>${extrasHtml(b, c, v.n)}
-      </section>`).join('');
+    wrap.innerHTML = withTargets(doc.blocks).map(x => {
+      if (x.t === 'v') return `
+      <section class="verse block" id="v${x.n}" data-v="${x.n}" data-tg="" tabindex="0" aria-label="Versículo ${x.n}">
+        ${ribbonHtml(b, c, x.n)}<span class="vnum">${x.n}</span><span class="vtext">${esc(x.text)}</span>${extrasHtml(b, c, x.n, '')}
+      </section>`;
+      const cls = x.t === 'd' ? 'division' : 'section-title';
+      return `
+      <div class="${cls} block" id="t${x.v}-${x.tg.slice(1)}" data-v="${x.v}" data-tg="${x.tg}" tabindex="0">
+        <span class="btext">${esc(x.text)}</span>${extrasHtml(b, c, x.v, x.tg)}
+      </div>`;
+    }).join('');
   }
-  // Punto en la esquina + comentario (oculto hasta pulsar el versículo)
-  function extrasHtml(b, c, v) {
-    const list = state.byRef.get(key(b, c, v)) || [];
+  // Punto en la esquina + comentario (oculto hasta pulsar)
+  function extrasHtml(b, c, v, tg) {
+    const list = state.byRef.get(key(b, c, v, tg)) || [];
     if (!list.length) return '';
     return `<span class="dot" title="Tiene comentario"></span>
       <div class="vcomment">${list.map(cm => `<p>${esc(cm.text)}</p>`).join('')}</div>`;
   }
-  function refreshVerse(v) {
-    const el = document.getElementById(`v${v}`); if (!el) return;
-    el.querySelectorAll('.dot, .vcomment').forEach(x => x.remove());
+  const infoOf = el => ({ v: +el.dataset.v, tg: el.dataset.tg || '' });
+  function refreshExtras(el) {
+    const { v, tg } = infoOf(el);
+    el.querySelectorAll(':scope > .dot, :scope > .vcomment').forEach(x => x.remove());
     const actions = el.querySelector('.vactions');
     const tmp = document.createElement('div');
-    tmp.innerHTML = extrasHtml(state.book, state.chapter, v);
+    tmp.innerHTML = extrasHtml(state.book, state.chapter, v, tg);
     [...tmp.childNodes].forEach(n => actions ? el.insertBefore(n, actions) : el.appendChild(n));
   }
-  const commentOf = v => (state.byRef.get(key(state.book, state.chapter, v)) || [])[0];
+  const commentOf = (v, tg) => (state.byRef.get(key(state.book, state.chapter, v, tg)) || [])[0];
   const isMarked = v => { const bm = state.bookmark; return !!bm && bm.book === state.book && bm.chapter === state.chapter && bm.verse === v; };
 
   // ---------- Marcapáginas «Seguir leyendo» ----------
@@ -214,55 +261,69 @@
     } catch (e) { toast('No se pudo guardar la marca: ' + e.message); }
   }
 
-  // ---------- Acciones del versículo ----------
+  // ---------- Acciones de un versículo, subtítulo o división ----------
   function closeActions() {
     if (!state.active) return;
-    const el = document.getElementById(`v${state.active}`);
-    el?.classList.remove('active');
-    el?.querySelector('.vactions')?.remove();
+    const el = document.getElementById(state.active);
     state.active = null;
+    if (!el) return;
+    el.classList.remove('active');
+    el.querySelector('.vactions')?.remove();
+    revealTop(el);
   }
-  function openActions(v, mode) {
-    closeActions();
-    const el = document.getElementById(`v${v}`); if (!el) return;
-    state.active = v;
+  function openActions(id, mode) {
+    if (state.active) {
+      const prev = document.getElementById(state.active);
+      prev?.classList.remove('active'); prev?.querySelector('.vactions')?.remove();
+      state.active = null;
+    }
+    const el = document.getElementById(id); if (!el) return;
+    const { v, tg } = infoOf(el);
+    state.active = id;
     el.classList.add('active');
-    const has = !!commentOf(v);
-    const n = (state.postsByRef.get(key(state.book, state.chapter, v)) || []).length;
+    const has = !!commentOf(v, tg);
+    const commentBtn = `<button class="act" data-act="comment">${ICON.comment}${has ? 'Editar comentario' : 'Añadir comentario'}</button>`;
+    const n = (state.postsByRef.get(key(state.book, state.chapter, v, '')) || []).length;
     const box = document.createElement('div');
     box.className = 'vactions';
     box.innerHTML = `
       <div class="actions">
-        <button class="act" data-act="comment">${ICON.comment}${has ? 'Editar comentario' : 'Añadir comentario'}</button>
+        ${commentBtn}
+        ${tg ? '' : `
         <button class="act" data-act="mark">${ICON.ribbon}${isMarked(v) ? 'Quitar marca' : 'Marcar aquí'}</button>
         <button class="act" data-act="edit-text">${ICON.text}Editar texto</button>
         <button class="act" data-act="share">${ICON.share}Compartir</button>
-        <button class="act" data-act="forum">${ICON.forum}Discusión${n ? ` <span class="act-count">${n}</span>` : ''}</button>
+        <button class="act" data-act="forum">${ICON.forum}Discusión${n ? ` <span class="act-count">${n}</span>` : ''}</button>`}
       </div>
       <div class="slot"></div>`;
     el.appendChild(box);
     if (mode === 'comment') showCommentForm(box);
     if (mode === 'forum') showForum(box, v);
   }
+  const activeEl = () => document.getElementById(state.active);
 
+  function commentRow(existing) {
+    return `${existing ? '<button class="btn ghost danger" data-act="delete">Eliminar</button><span class="grow"></span>' : ''}
+      <button class="btn ghost" data-act="close">Cerrar</button>
+      <button class="btn primary" data-act="save">Guardar</button>`;
+  }
   function showCommentForm(box) {
-    const existing = commentOf(state.active);
+    const { v, tg } = infoOf(activeEl());
+    const existing = commentOf(v, tg);
     box.querySelector('.slot').innerHTML = `
       <div class="form">
-        <textarea class="ctext" placeholder="Escribe aquí tu comentario…" aria-label="Comentario">${existing ? esc(existing.text) : ''}</textarea>
-        <div class="form-row">
-          ${existing ? '<button class="btn ghost danger" data-act="delete">Eliminar</button><span class="grow"></span>' : ''}
-          <button class="btn ghost" data-act="cancel">Cancelar</button>
-          <button class="btn primary" data-act="save">Guardar</button>
-        </div>
+        <textarea class="ctext grow" placeholder="Escribe aquí tu comentario…" aria-label="Comentario">${existing ? esc(existing.text) : ''}</textarea>
+        <div class="form-row">${commentRow(existing)}</div>
       </div>`;
     const ta = box.querySelector('textarea');
+    autosize(ta);
     ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
   }
+  // Guardar no cierra: el comentario se actualiza y se puede seguir escribiendo
   async function saveComment(box) {
-    const v = state.active;
+    const el = activeEl(); const { v, tg } = infoOf(el);
     const text = box.querySelector('.ctext').value.trim();
-    const existing = commentOf(v);
+    const existing = commentOf(v, tg);
     if (!text) return existing ? deleteComment() : toast('Escribe un comentario');
     const btn = box.querySelector('[data-act="save"]'); btn.disabled = true;
     try {
@@ -270,9 +331,11 @@
         const upd = await api('PUT', `/api/comments/${existing.id}`, { text });
         state.comments = state.comments.map(c => c.id === upd.id ? upd : c);
       } else {
-        state.comments.push(await api('POST', '/api/comments', { book: state.book, chapter: state.chapter, verse: v, text }));
+        state.comments.push(await api('POST', '/api/comments', { book: state.book, chapter: state.chapter, verse: v, target: tg, text }));
       }
-      indexComments(); refreshVerse(v); renderCommentIndex(); closeActions();
+      indexComments(); refreshExtras(el); renderCommentIndex();
+      box.querySelector('[data-act="comment"]').lastChild.textContent = 'Editar comentario';
+      box.querySelector('.form-row').innerHTML = commentRow(true);
       toast('Comentario guardado');
     } catch (e) {
       btn.disabled = false;
@@ -280,37 +343,40 @@
     }
   }
   async function deleteComment() {
-    const v = state.active;
-    const list = state.byRef.get(key(state.book, state.chapter, v)) || [];
-    if (!list.length || !confirm('¿Eliminar el comentario de este versículo?')) return;
+    const el = activeEl(); const { v, tg } = infoOf(el);
+    const list = state.byRef.get(key(state.book, state.chapter, v, tg)) || [];
+    if (!list.length || !confirm('¿Eliminar este comentario?')) return;
     try {
       for (const c of list) await api('DELETE', `/api/comments/${c.id}`);
       const ids = new Set(list.map(c => c.id));
       state.comments = state.comments.filter(c => !ids.has(c.id));
-      indexComments(); refreshVerse(v); renderCommentIndex(); closeActions();
+      indexComments(); refreshExtras(el); renderCommentIndex(); closeActions();
       toast('Comentario eliminado');
     } catch (e) { toast('No se pudo eliminar: ' + e.message); }
   }
 
   // Editar el texto de un solo versículo
   function showTextForm(box) {
+    const { v } = infoOf(activeEl());
     box.querySelector('.slot').innerHTML = `
       <div class="form">
-        <textarea class="ttext" aria-label="Texto del versículo">${esc(verseText(state.active))}</textarea>
+        <textarea class="ttext grow" aria-label="Texto del versículo">${esc(verseText(v))}</textarea>
+        <p class="form-hint">Si aquí dentro hay varios versículos unidos, sepáralos en «Editar capítulo», al pie de la página.</p>
         <div class="form-row">
-          <button class="btn ghost" data-act="cancel">Cancelar</button>
+          <button class="btn ghost" data-act="close">Cerrar</button>
           <button class="btn primary" data-act="save-text">Guardar texto</button>
         </div>
       </div>`;
-    box.querySelector('textarea').focus();
+    const ta = box.querySelector('textarea'); autosize(ta); ta.focus();
   }
   async function saveText(box) {
-    const v = state.active, text = box.querySelector('.ttext').value.trim();
+    const el = activeEl(); const { v } = infoOf(el);
+    const text = box.querySelector('.ttext').value.trim();
     if (!text) return toast('El texto no puede quedar vacío');
     try {
       const upd = await api('PUT', `/api/text/${state.book}/${state.chapter}/${v}`, { text });
-      const verse = chapterVerses().find(x => x.n === v); if (verse) verse.text = upd.text;
-      document.querySelector(`#v${v} .vtext`).textContent = upd.text;
+      const verse = chapterDoc().blocks.find(x => x.t === 'v' && x.n === v); if (verse) verse.text = upd.text;
+      el.querySelector('.vtext').textContent = upd.text;
       closeActions(); toast('Texto guardado');
     } catch (e) { toast('No se pudo guardar: ' + e.message); }
   }
@@ -325,16 +391,16 @@
       </div>`).join('');
   }
   function showForum(box, v) {
-    const list = state.postsByRef.get(key(state.book, state.chapter, v)) || [];
+    const list = state.postsByRef.get(key(state.book, state.chapter, v, '')) || [];
     box.querySelector('.slot').innerHTML = `
       <div class="forum">
         <div class="forum-title">Discusión · ${esc(refLabel(state.book, state.chapter, v))}</div>
         <div class="posts">${postsHtml(list)}</div>
         <div class="form">
           <input class="pname" type="text" maxlength="40" placeholder="Tu nombre" aria-label="Tu nombre" value="${esc(store.get('name', ''))}">
-          <textarea class="ptext" placeholder="Escribe tu mensaje…" aria-label="Mensaje"></textarea>
+          <textarea class="ptext grow" placeholder="Escribe tu mensaje…" aria-label="Mensaje"></textarea>
           <div class="form-row">
-            <button class="btn ghost" data-act="cancel">Cerrar</button>
+            <button class="btn ghost" data-act="close">Cerrar</button>
             <button class="btn primary" data-act="post">Publicar</button>
           </div>
         </div>
@@ -342,7 +408,7 @@
     const posts = box.querySelector('.posts'); posts.scrollTop = posts.scrollHeight;
   }
   async function publish(box) {
-    const v = state.active;
+    const el = activeEl(); const { v } = infoOf(el);
     const name = box.querySelector('.pname').value.trim();
     const text = box.querySelector('.ptext').value.trim();
     if (!name) return toast('Escribe tu nombre');
@@ -352,7 +418,7 @@
       state.posts.push(await api('POST', '/api/posts', { book: state.book, chapter: state.chapter, verse: v, name, text }));
       store.set('name', name);
       indexPosts(); renderForumIndex();
-      openActions(v, 'forum');
+      openActions(el.id, 'forum');
       toast('Mensaje publicado');
     } catch (e) {
       btn.disabled = false;
@@ -376,116 +442,161 @@
 
   $('#verses').addEventListener('click', e => {
     if (e.target.closest('[data-act="add-text"]')) { openEditor(); return; }
-    const verse = e.target.closest('.verse'); if (!verse) return;
-    const v = +verse.dataset.v;
+    const el = e.target.closest('.block'); if (!el) return;
     const box = e.target.closest('.vactions');
-    if (!box) { state.active === v ? closeActions() : openActions(v); return; }
+    if (!box) { state.active === el.id ? closeActions() : openActions(el.id); return; }
     const btn = e.target.closest('[data-act]'); if (!btn) return;
+    const { v } = infoOf(el);
     const act = btn.dataset.act;
     if (act === 'comment') showCommentForm(box);
     else if (act === 'forum') showForum(box, v);
     else if (act === 'share') share(v);
     else if (act === 'mark') toggleMark(v);
     else if (act === 'edit-text') showTextForm(box);
-    else if (act === 'cancel') box.querySelector('.slot').innerHTML = '';
+    else if (act === 'close') closeActions();
     else if (act === 'save') saveComment(box);
     else if (act === 'save-text') saveText(box);
     else if (act === 'delete') deleteComment();
     else if (act === 'post') publish(box);
   });
   $('#verses').addEventListener('keydown', e => {
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('verse')) {
-      e.preventDefault(); const v = +e.target.dataset.v; state.active === v ? closeActions() : openActions(v);
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('block')) {
+      e.preventDefault(); state.active === e.target.id ? closeActions() : openActions(e.target.id);
     }
   });
 
   // ---------- Editor del capítulo completo ----------
   const SUP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
-  // Convierte el texto pegado en versículos. Cada versículo empieza por su número;
-  // las líneas que empiezan por «#» son títulos de sección.
+  // Convierte el texto pegado en bloques:
+  //  · línea que empieza por «#»          → subtítulo propio
+  //  · línea que empieza por «I.», «II.»… → división del texto (no se marca como versículo)
+  //  · línea que empieza por un número    → versículo con ese número (se admiten saltos)
+  //  · dentro de una línea, el número siguiente (n+1) también abre versículo
   function parseChapter(raw) {
-    const titles = [];
-    // Texto continuo; los títulos («# …») quedan como marcas \u0001n\u0001 en su sitio
-    const stream = raw.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, d => SUP[d]).split(/\r?\n/).map(line => {
-      const t = line.match(/^\s*#+\s*(.*)$/);
-      if (!t) return line;
-      titles.push(t[1].replace(/\s+/g, ' ').trim());
-      return `\u0001${titles.length - 1}\u0001`;
-    }).join('\n');
-    const occurrences = (n, from) => {
-      const re = new RegExp(`(^|[\\s.,;:!?»”"'’)\\]—–\\-\\u0001])(${n})(?!\\d)[ \\t]*`, 'g');
-      re.lastIndex = from; const out = []; let m;
-      while ((m = re.exec(stream))) {
+    const blocks = []; let cur = null;
+    const clean = s => s.replace(/\s+/g, ' ').trim();
+    const startVerse = n => { cur = { t: 'v', n, text: '' }; blocks.push(cur); };
+    const lines = raw.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, d => SUP[d]).split(/\r?\n/);
+    // agrupar líneas de texto seguidas en «tramos» separados por subtítulos y divisiones
+    const items = []; let run = null;
+    for (const line of lines) {
+      const h = line.match(/^\s*#+\s*(.*)$/);
+      if (h) { run = null; if (clean(h[1])) items.push({ t: 'h', text: clean(h[1]) }); continue; }
+      if (ROMAN.test(line)) { run = null; items.push({ t: 'd', text: clean(line) }); continue; }
+      if (!line.trim()) continue;
+      if (!run) { run = { t: 'run', lines: [] }; items.push(run); }
+      run.lines.push(line);
+    }
+    const NUM = n => new RegExp(`(^|[\\s.,;:!?»”"'’)\\]—–\\-])(${n})(?!\\d)[ \\t]*`, 'g');
+    const occurrences = (text, n, from) => {
+      const re = NUM(n); re.lastIndex = from; const out = []; let m;
+      while ((m = re.exec(text))) {
         const at = m.index + m[1].length;
-        out.push({ at, end: m.index + m[0].length, lineStart: at === 0 || /[\n\u0001]/.test(stream[at - 1]) });
+        out.push({ at, end: m.index + m[0].length, lineStart: at === 0 || /\n[ \t]*$/.test(text.slice(0, at)) });
         re.lastIndex = at + 1;
       }
       return out;
     };
-    // Primer versículo: el número del principio, o el 1 si el texto empieza sin número
-    const lead = stream.match(/^(?:\s|\u0001\d+\u0001)*/)[0].length;
-    const m0 = stream.slice(lead).match(/^(\d{1,3})(?!\d)[ \t]*/);
-    const starts = [m0 ? { n: +m0[1], at: lead, end: lead + m0[0].length } : { n: 1, at: lead, end: lead }];
-    for (;;) {
-      const cur = starts[starts.length - 1];
-      const occ = occurrences(cur.n + 1, cur.end);
-      if (!occ.length) break;
-      // Si el número aparece varias veces antes del siguiente, se prefiere el que empieza línea; si no, el último
-      const next = occurrences(cur.n + 2, occ[0].end)[0];
-      const cands = occ.filter(o => !next || o.at < next.at);
-      const pick = [...cands].reverse().find(o => o.lineStart) || cands[cands.length - 1];
-      starts.push({ n: cur.n + 1, at: pick.at, end: pick.end });
+    for (const it of items) {
+      if (it.t !== 'run') { blocks.push(it); continue; }
+      const text = it.lines.join('\n');
+      let pos = 0;
+      for (;;) {
+        // siguiente línea que empieza por un número mayor que el actual
+        const lsRe = /(^|\n)[ \t]*(\d{1,3})(?!\d)[ \t]*/g; lsRe.lastIndex = pos;
+        let L = null, m;
+        while ((m = lsRe.exec(text))) {
+          const at = m.index + m[1].length;
+          if (at >= pos && (!cur || +m[2] > cur.n)) { L = { n: +m[2], at, end: m.index + m[0].length }; break; }
+          lsRe.lastIndex = m.index + 1;
+        }
+        if (!cur) {
+          if (L && !text.slice(pos, L.at).trim()) { startVerse(L.n); pos = L.end; }
+          else startVerse(1);   // texto sin número al principio: versículo 1
+          continue;
+        }
+        const limit = L ? L.at : text.length;
+        const inline = occurrences(text, cur.n + 1, pos).filter(o => o.at < limit && !o.lineStart);
+        let pick = null, n = cur.n + 1;
+        if (L && L.n === cur.n + 1) pick = L;
+        else if (inline.length) {
+          // si el número aparece varias veces antes del siguiente, se toma el último
+          const next = occurrences(text, cur.n + 2, inline[0].end)[0];
+          const cands = inline.filter(o => !next || o.at < next.at);
+          pick = cands[cands.length - 1];
+        } else if (L) { pick = L; n = L.n; }
+        if (!pick) break;
+        cur.text += ' ' + text.slice(pos, pick.at);
+        startVerse(n); pos = pick.end;
+      }
+      cur.text += ' ' + text.slice(pos);
     }
-    const takeTitle = seg => { const ids = [...seg.matchAll(/\u0001(\d+)\u0001/g)].map(m => titles[+m[1]]).filter(Boolean); return ids.join(' · '); };
-    const clean = s => s.replace(/\u0001\d+\u0001/g, ' ').replace(/\s+/g, ' ').trim();
-    let pendingTitle = takeTitle(stream.slice(0, starts[0].at));
-    if (!stream.trim()) return [];
-    return starts.map((st, i) => {
-      const seg = stream.slice(st.end, i + 1 < starts.length ? starts[i + 1].at : stream.length);
-      const v = { n: st.n, text: clean(seg) };
-      if (pendingTitle) v.title = pendingTitle;
-      pendingTitle = takeTitle(seg);   // un título dentro del texto es el del versículo siguiente
-      return v;
-    });
+    blocks.forEach(b => { b.text = clean(b.text); });
+    return blocks;
   }
-  const serialize = verses => verses.map(v => `${v.title ? `# ${v.title}\n` : ''}${v.n} ${v.text}`).join('\n');
+  const serialize = blocks => blocks.map(b => b.t === 'h' ? `# ${b.text}` : b.t === 'd' ? b.text : `${b.n} ${b.text}`).join('\n');
   function editorStatus() {
-    const verses = parseChapter($('#editorText').value);
+    const blocks = parseChapter($('#editorText').value);
     const st = $('#editorStatus');
-    if (!$('#editorText').value.trim()) { st.textContent = ''; st.className = 'editor-status'; return verses; }
+    if (!$('#editorText').value.trim()) { st.innerHTML = ''; st.className = 'editor-status'; return blocks; }
+    const verses = blocks.filter(b => b.t === 'v');
+    const heads = blocks.filter(b => b.t === 'h').length, divs = blocks.filter(b => b.t === 'd').length;
     const empty = verses.filter(v => !v.text).map(v => v.n);
-    const titles = verses.filter(v => v.title).length;
-    st.className = 'editor-status' + (empty.length ? ' warn' : '');
-    st.textContent = verses.length
-      ? `Se detectan ${verses.length} versículos (del ${verses[0].n} al ${verses[verses.length - 1].n})` +
-        (titles ? ` y ${titles} título${titles > 1 ? 's' : ''}` : '') + '.' +
-        (empty.length ? ` Hay versículos sin texto: ${empty.join(', ')}.` : '')
-      : 'No se detecta ningún versículo.';
-    return verses;
+    const gaps = [];
+    for (let i = 1; i < verses.length; i++) for (let n = verses[i - 1].n + 1; n < verses[i].n; n++) gaps.push(n);
+    // versículos que parecen contener el siguiente número (posible unión)
+    const joined = verses.filter(v => new RegExp(`(^|\\s)${v.n + 1}(?!\\d)\\s`).test(v.text) && !verses.some(w => w.n === v.n + 1)).map(v => v.n);
+    const parts = [];
+    parts.push(verses.length ? `${verses.length} versículos (del ${verses[0].n} al ${verses[verses.length - 1].n})` : 'ningún versículo');
+    if (heads) parts.push(`${heads} subtítulo${heads > 1 ? 's' : ''}`);
+    if (divs) parts.push(`${divs} división${divs > 1 ? 'es' : ''}`);
+    let html = `Se detectan ${parts.join(', ')}.`;
+    if (gaps.length) html += `<br>Faltan los números: ${gaps.slice(0, 15).join(', ')}${gaps.length > 15 ? '…' : ''}.`;
+    if (joined.length) html += `<br>Puede que estén unidos al siguiente: ${joined.join(', ')}. Pon el número siguiente al principio de una línea nueva.`;
+    if (empty.length) html += `<br>Versículos sin texto: ${empty.join(', ')}.`;
+    st.className = 'editor-status' + (empty.length ? ' warn' : (gaps.length || joined.length) ? ' info' : '');
+    st.innerHTML = html;
+    return blocks;
   }
   function openEditor() {
     closeActions();
+    const doc = chapterDoc();
     $('#editorTitle').textContent = `${bookOf(state.book).short} ${state.chapter} · texto del capítulo`;
-    $('#editorText').value = serialize(chapterVerses());
+    $('#editorName').value = doc.name || '';
+    $('#editorText').value = serialize(doc.blocks);
     editorStatus();
     $('#editorModal').hidden = false; lockScroll('editor');
-    $('#editorText').focus();
   }
   function closeEditor() { $('#editorModal').hidden = true; unlockScroll('editor'); }
   async function saveEditor() {
-    const verses = editorStatus();
-    if (verses.some(v => !v.text)) return toast('Hay versículos sin texto. Revisa la numeración.');
-    const prev = chapterVerses();
-    if (!verses.length && prev.length && !confirm('El capítulo quedará vacío. ¿Seguro?')) return;
+    const blocks = editorStatus();
+    if (blocks.some(b => b.t === 'v' && !b.text)) return toast('Hay versículos sin texto. Revisa la numeración.');
+    const prev = chapterDoc();
+    if (!blocks.length && prev.blocks.length && !confirm('El capítulo quedará vacío. ¿Seguro?')) return;
+    // ¿Quedan comentarios o mensajes de textos que desaparecen?
+    const verses = new Set(blocks.filter(b => b.t === 'v').map(b => b.n));
+    const tks = new Set(withTargets(blocks).filter(b => b.tg).map(b => `${b.v}:${b.tg}`));
+    const here = x => x.book === state.book && x.chapter === state.chapter;
+    const orphanC = state.comments.filter(x => here(x) && !(x.target ? tks.has(`${x.verse}:${x.target}`) : verses.has(x.verse))).length;
+    const orphanP = state.posts.filter(x => here(x) && !verses.has(x.verse)).length;
+    let purge = false;
+    if (orphanC + orphanP) {
+      const what = [orphanC && `${orphanC} comentario${orphanC > 1 ? 's' : ''}`, orphanP && `${orphanP} mensaje${orphanP > 1 ? 's' : ''} de discusión`].filter(Boolean).join(' y ');
+      purge = confirm(`Hay ${what} de textos que ya no existen en este capítulo.\n\nAceptar: eliminarlos.\nCancelar: conservarlos ocultos.`);
+    }
     const btn = $('#editorSave'); btn.disabled = true;
     try {
-      const res = await api('PUT', `/api/text/${state.book}/${state.chapter}`, { verses });
-      state.texts.set(`${state.book}:${state.chapter}`, res.verses);
-      const k = `${state.book}:${state.chapter}`;
-      if (res.verses.length) state.summary[k] = res.verses.length; else delete state.summary[k];
+      const res = await api('PUT', `/api/text/${state.book}/${state.chapter}`, { name: $('#editorName').value.trim(), blocks, purge });
+      state.texts.set(`${state.book}:${state.chapter}`, { name: res.name, blocks: res.blocks });
+      if (purge) await loadAll();
+      else state.summary[`${state.book}:${state.chapter}`] = {
+        name: res.name, verses: res.blocks.filter(b => b.t === 'v').map(b => b.n),
+        targets: withTargets(res.blocks).filter(b => b.tg).map(b => `${b.v}:${b.tg}`),
+      };
       closeEditor();
       const y = window.scrollY; await renderChapter(); refreshRibbons(); window.scrollTo(0, y);
-      toast('Texto del capítulo guardado');
+      renderCommentIndex(); renderForumIndex();
+      toast(res.purged ? `Texto guardado · ${res.purged} elemento${res.purged > 1 ? 's' : ''} eliminado${res.purged > 1 ? 's' : ''}` : 'Texto del capítulo guardado');
     } catch (e) { toast('No se pudo guardar: ' + e.message); }
     btn.disabled = false;
   }
@@ -533,7 +644,7 @@
   // Gesto: deslizar a la derecha abre el menú; a la izquierda lo cierra. El menú sigue al dedo.
   (() => {
     let sx = 0, sy = 0, dir = null, startOpen = false, w = 0, dx = 0, t0 = 0;
-    const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid') || document.querySelector('.modal-scrim:not([hidden])');
+    const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-list') || document.querySelector('.modal-scrim:not([hidden])');
     document.addEventListener('touchstart', e => {
       if (e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
       sx = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = Date.now();
@@ -579,19 +690,24 @@
     if (e.key === 'ArrowRight') step(1);
   });
 
-  // Libros desplegables: Evangelio según Lucas / Hechos de los apóstoles → capítulos
+  // Libros desplegables: Evangelio según Lucas / Hechos de los apóstoles → capítulos (con su nombre)
   const openBooks = new Set();
   function renderBookList() {
-    const withComments = new Set(state.comments.map(c => `${c.book}:${c.chapter}`));
+    const withComments = new Set(state.comments.filter(c => alive(c.book, c.chapter, c.verse, c.target)).map(c => `${c.book}:${c.chapter}`));
     $('#bookList').innerHTML = state.books.map(b => {
       const open = openBooks.has(b.id);
       return `<button class="book-head${b.id === state.book ? ' current' : ''}" data-book="${b.id}" aria-expanded="${open}">
           <span><span class="book-part">Parte ${esc(b.part)}</span><span class="book-name">${esc(b.name)}</span></span><span class="chev"></span>
         </button>
-        ${open ? `<div class="chapter-grid">${Array.from({ length: b.chapters }, (_, i) => {
-          const c = i + 1, k = `${b.id}:${c}`;
-          const cls = [b.id === state.book && c === state.chapter ? 'current' : '', state.summary[k] ? '' : 'no-text', withComments.has(k) ? 'has-c' : ''].join(' ').trim();
-          return `<button data-b="${b.id}" data-c="${c}" class="${cls}" title="${state.summary[k] ? `${state.summary[k]} versículos` : 'Sin texto todavía'}">${c}</button>`;
+        ${open ? `<div class="chapter-list">${Array.from({ length: b.chapters }, (_, i) => {
+          const c = i + 1, k = `${b.id}:${c}`, s = state.summary[k];
+          const hasText = s && s.verses.length;
+          const cls = ['ch-row', b.id === state.book && c === state.chapter ? 'current' : '', hasText ? '' : 'no-text'].join(' ').trim();
+          return `<button data-b="${b.id}" data-c="${c}" class="${cls}">
+            <span class="ch-num">${c}</span>
+            <span class="ch-label">${s && s.name ? esc(s.name) : hasText ? `Capítulo ${c}` : 'Sin texto todavía'}</span>
+            ${withComments.has(k) ? '<span class="ch-dot" title="Tiene comentarios"></span>' : ''}
+          </button>`;
         }).join('')}</div>` : ''}`;
     }).join('');
   }
@@ -606,21 +722,24 @@
     }
   });
 
-  // Índices desplegables: Libro → Capítulo:Versículo → contenido
+  // Índices desplegables: Libro → Capítulo:Versículo (o subtítulo) → contenido. Solo textos que existen.
   function makeIndex({ el, countEl, byRef, emptyText, refLabelText, body, gotoMode, gotoText }) {
     const open = { books: new Set(), refs: new Set() };
+    const parse = k => { const [b, c, v, tg] = k.split(':'); return { b: +b, c: +c, v: +v, tg: tg || '' }; };
     function render() {
-      const entries = [...byRef()].filter(([k]) => bookOf(+k.split(':')[0]));
+      const entries = [...byRef()].filter(([k]) => { const r = parse(k); return bookOf(r.b) && alive(r.b, r.c, r.v, r.tg); });
       const total = entries.reduce((s, [, l]) => s + l.length, 0);
       countEl.textContent = total;
       if (!total) { el.innerHTML = `<div class="empty">${emptyText}</div>`; return; }
       const groups = new Map();
-      for (const [k, list] of entries) {
-        const b = +k.split(':')[0];
+      for (const e of entries) {
+        const b = parse(e[0]).b;
         if (!groups.has(b)) groups.set(b, []);
-        groups.get(b).push([k, list]);
+        groups.get(b).push(e);
       }
-      const cmp = (a, b) => { const [, c1, v1] = a[0].split(':').map(Number), [, c2, v2] = b[0].split(':').map(Number); return c1 - c2 || v1 - v2; };
+      // orden de lectura: capítulo, versículo, y los subtítulos antes de su versículo
+      const ord = r => [r.c, r.v, r.tg ? +r.tg.slice(1) : 99];
+      const cmp = (a, b) => { const x = ord(parse(a[0])), y = ord(parse(b[0])); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; };
       let html = '';
       for (const b of [...groups.keys()].sort((x, y) => x - y)) {
         const refs = groups.get(b).sort(cmp);
@@ -629,13 +748,14 @@
         if (!bOpen) continue;
         html += '<div class="idx-refs">';
         for (const [k, list] of refs) {
-          const [, c, v] = k.split(':').map(Number);
+          const r = parse(k);
+          const doc = state.texts.get(`${r.b}:${r.c}`);
+          const blk = doc && withTargets(doc.blocks).find(x => x.v === r.v && x.tg === r.tg);
           const rOpen = open.refs.has(k);
-          html += `<button class="idx-ref" data-ir="${k}" aria-expanded="${rOpen}">${refLabelText(c, v, list)}<span class="chev"></span></button>`;
+          html += `<button class="idx-ref" data-ir="${k}" aria-expanded="${rOpen}">${refLabelText(r, list, blk)}<span class="chev"></span></button>`;
           if (rOpen) {
-            const txt = (state.texts.get(`${b}:${c}`) || []).find(x => x.n === v)?.text;
             html += `<div class="idx-body">
-              ${txt ? `<p class="idx-verse">«${esc(txt)}»</p>` : ''}
+              ${blk ? `<p class="idx-verse">«${esc(blk.text)}»</p>` : ''}
               ${body(list)}
               <p class="idx-go-row"><button class="idx-go" data-goto="${k}">${gotoText} ›</button></p>
             </div>`;
@@ -648,8 +768,10 @@
     el.addEventListener('click', async e => {
       const t = e.target.closest('[data-ib],[data-ir],[data-goto]'); if (!t) return;
       if (t.dataset.goto) {
-        const [b, c, v] = t.dataset.goto.split(':').map(Number);
-        closeDrawer(); state.pendingOpen = { v, mode: gotoMode }; go(b, c, v); return;
+        const r = parse(t.dataset.goto);
+        closeDrawer();
+        state.pendingOpen = { id: r.tg ? `t${r.v}-${r.tg.slice(1)}` : `v${r.v}`, mode: gotoMode };
+        go(r.b, r.c, r.tg ? null : r.v); return;
       }
       if (t.dataset.ib) {
         const b = +t.dataset.ib;
@@ -657,23 +779,24 @@
       } else {
         const k = t.dataset.ir;
         if (open.refs.has(k)) open.refs.delete(k);
-        else { open.refs.add(k); const [b, c] = k.split(':').map(Number); try { await loadChapter(b, c); } catch { /* se muestra sin texto */ } }
+        else { open.refs.add(k); const r = parse(k); try { await loadChapter(r.b, r.c); } catch { /* se muestra sin texto */ } }
       }
       render();
     });
+    // al cargar capítulos, los subtítulos del índice pueden mostrar su texto
     return render;
   }
   const renderCommentIndex = makeIndex({
     el: $('#commentIndex'), countEl: $('#commentTotal'), byRef: () => state.byRef,
-    emptyText: 'Aún no hay comentarios. Pulsa cualquier versículo para añadir uno.',
-    refLabelText: (c, v) => `Versículo ${c}:${v}`,
+    emptyText: 'Aún no hay comentarios. Pulsa cualquier versículo o subtítulo para añadir uno.',
+    refLabelText: (r, list, blk) => r.tg ? `Subtítulo · cap. ${r.c}${blk ? `<span class="idx-sub">${esc(blk.text)}</span>` : ''}` : `Versículo ${r.c}:${r.v}`,
     body: list => list.map(cm => `<div class="idx-comment">${esc(cm.text)}</div>`).join(''),
-    gotoMode: null, gotoText: 'Ir al versículo',
+    gotoMode: null, gotoText: 'Ir al texto',
   });
   const renderForumIndex = makeIndex({
     el: $('#forumIndex'), countEl: $('#forumTotal'), byRef: () => state.postsByRef,
     emptyText: 'Aún no hay discusiones. Pulsa un versículo y elige «Discusión» para empezar una.',
-    refLabelText: (c, v, list) => `Versículo ${c}:${v}<span class="count">${list.length} mensaje${list.length > 1 ? 's' : ''}</span>`,
+    refLabelText: (r, list) => `Versículo ${r.c}:${r.v}<span class="count">${list.length} mensaje${list.length > 1 ? 's' : ''}</span>`,
     body: list => {
       const last = list[list.length - 1];
       return `<p class="idx-last">Último mensaje de <b>${esc(last.name)}</b> · ${fmtDate(last.createdAt)}</p>`;

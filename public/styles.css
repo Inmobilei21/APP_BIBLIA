@@ -307,3 +307,51 @@ body.scroll-locked { position: fixed; left: 0; right: 0; overflow: hidden; }
 .editor-status { font-size: 14px; color: var(--gold-deep); margin: 8px 0 0; min-height: 1.4em; }
 .editor-status.warn { color: var(--danger); }
 .modal-foot { gap: 8px; }
+
+/* ---------- v2.2 ---------- */
+.vcomment { display: none; }
+.block.active .vcomment { display: block; }
+
+.section-title, .division { position: relative; cursor: pointer; border-radius: 10px; padding: 6px 30px 6px 12px; border: 1px solid transparent; }
+.section-title { margin: 18px 0 2px; }
+.section-title:hover, .division:hover { background: var(--paper-warm); }
+.section-title.active, .division.active { background: var(--gold-pale); border-color: var(--gold-light); }
+.section-title .vcomment, .division .vcomment { font-weight: 400; font-size: 16px; text-transform: none; letter-spacing: 0; }
+.division {
+  margin: 26px 0 10px; text-align: center; font-size: 15px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--gold-deep); padding-left: 30px;
+}
+.division .vcomment, .division .vactions { text-align: left; }
+.division .vactions .actions { justify-content: flex-start; }
+
+.ch-name { display: block; font-size: 16px; font-weight: 400; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0; }
+
+.chapter-list { display: grid; gap: 2px; padding: 4px 6px 10px; }
+.ch-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: transparent;
+  padding: 7px 8px; border-radius: 8px; font-size: 15px;
+}
+.ch-row:hover { background: var(--gold-pale); }
+.ch-num {
+  flex: 0 0 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line);
+  background: #fff; font-size: 14px; color: var(--ink);
+}
+.ch-label { flex: 1; color: var(--ink); }
+.ch-row.current .ch-num { background: var(--gold-grad); color: #fff; border-color: transparent; }
+.ch-row.current .ch-label { color: var(--gold-deep); font-weight: 600; }
+.ch-row.no-text .ch-num { border-style: dashed; color: #b9ae96; }
+.ch-row.no-text .ch-label { color: #b9ae96; font-style: italic; }
+.ch-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); flex-shrink: 0; }
+
+textarea.grow { min-height: 120px; resize: none; line-height: 1.6; }
+.form-hint { font-size: 13px; color: var(--ink-soft); margin: 6px 0 0; }
+
+.editor-label { font-size: 13px; font-weight: 600; color: var(--gold-deep); margin-bottom: 4px; }
+.editor-label span { font-weight: 400; color: var(--ink-soft); }
+.editor-name {
+  width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; font-size: 16px; margin-bottom: 10px;
+}
+.editor-name:focus { outline: 2px solid var(--gold-light); border-color: var(--gold); }
+.editor-help { line-height: 1.6; }
+.editor-status.info { color: #8a5a00; }
+.idx-sub { display: block; font-size: 13px; color: var(--ink-soft); }
