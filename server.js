@@ -6,6 +6,7 @@ const { normalize, targets } = require('./lib-blocks');
 
 const PORT = process.env.PORT || 3000;
 const app = express();
+app.set('trust proxy', true);
 app.use(express.json({ limit: '2mb' }));
 
 // ---------- Almacenamiento: PostgreSQL si hay DATABASE_URL; si no, archivo JSON ----------
@@ -224,6 +225,12 @@ function requirePin(req, res, next) {
   }
   failures.delete(ip); next();
 }
+// TEMPORAL: diagnóstico de la cabecera del PIN (no revela el valor)
+app.get('/api/pin-debug', (req, res) => {
+  const raw = String(req.get('x-owner-token') || '');
+  res.json({ present: !!raw, len: raw.length, onlyDigits: /^\d+$/.test(raw), expectedLen: (process.env.APP_PIN || '').length,
+    authHeader: !!req.get('authorization') });
+});
 const STATUSES = ['pending', 'working', 'done', 'rejected'];
 app.get('/api/proposals', requirePin, wrap(async (req, res) => {
   const list = await store.listProposals();
