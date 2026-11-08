@@ -124,12 +124,9 @@
     const line = parseFloat(cs.lineHeight) || 26;
     const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + 2;
     let max = line * 20 + pad;
-    // Con el teclado abierto, que el cuadro y los botones quepan en el hueco visible
-    // Con el teclado abierto: que el cuadro y los botones quepan en lo que queda visible por debajo
-    if (document.activeElement === ta) {
-      const avail = visibleArea().bottom - ta.getBoundingClientRect().top - FORM_BUTTONS;
-      max = Math.min(max, Math.max(line * 4 + pad, avail));
-    }
+    // Mientras se escribe, el alto máximo queda fijado al colocar el cuadro (hueco visible sobre el teclado).
+    // Así no cambia de tamaño si se arrastra la página.
+    if (ta._cap) max = Math.min(max, ta._cap);
     ta.style.height = 'auto';
     const h = Math.min(ta.scrollHeight + 2, max);
     ta.style.height = h + 'px';
@@ -158,6 +155,8 @@
       const limit = vis.bottom - minBox - FORM_BUTTONS;
       if (boxTop > limit) delta += boxTop - limit;
       window.scrollBy(0, delta);
+      const pad = parseFloat(getComputedStyle(ta).paddingTop) * 2 + 2;
+      ta._cap = Math.max(line * 4 + pad, visibleArea().bottom - ta.getBoundingClientRect().top - FORM_BUTTONS);
       autosize(ta);
     };
     document.body.classList.add('editing');   // espacio extra al final para poder subir el versículo
@@ -166,14 +165,17 @@
     ta.setSelectionRange(ta.value.length, ta.value.length);
     place();
     ta.scrollTop = ta.scrollHeight;   // cursor visible al final del texto
-    // el teclado del móvil tarda un momento en aparecer y mueve la página: se recoloca
+    // El teclado del móvil tarda un momento en aparecer y mueve la página: se recoloca solo mientras aparece
+    // (el primer segundo y medio). Después se deja libre para que puedas arrastrar la página como quieras.
     const timer = setTimeout(place, 350);
     const vv = window.visualViewport;
     const onResize = () => place();
     vv?.addEventListener('resize', onResize);
-    const stop = () => { clearTimeout(timer); vv?.removeEventListener('resize', onResize); ta.removeEventListener('blur', stop); };
+    const release = () => { clearTimeout(timer); vv?.removeEventListener('resize', onResize); };
+    const releaseTimer = setTimeout(release, 1500);
+    const stop = () => { release(); clearTimeout(releaseTimer); ta.removeEventListener('blur', stop); };
     ta.addEventListener('blur', stop);
-    stopPlacing = stop;
+    stopPlacing = () => { stop(); ta._cap = null; };
   }
   // Tras cerrar, que el principio del versículo quede a la vista
   function revealTop(el) {
@@ -704,7 +706,7 @@
   // Gesto: deslizar a la derecha abre el menú; a la izquierda lo cierra. El menú sigue al dedo.
   (() => {
     let sx = 0, sy = 0, dir = null, startOpen = false, w = 0, dx = 0, t0 = 0;
-    const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-list') || document.querySelector('.modal-scrim:not([hidden])');
+    const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid') || document.querySelector('.modal-scrim:not([hidden])');
     document.addEventListener('touchstart', e => {
       if (e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
       sx = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = Date.now();
@@ -760,15 +762,11 @@
       return `<button class="book-head${b.id === state.book ? ' current' : ''}" data-book="${b.id}" aria-expanded="${open}">
           <span><span class="book-part">Parte ${esc(b.part)}</span><span class="book-name">${esc(b.name)}</span></span><span class="chev"></span>
         </button>
-        ${open ? `<div class="chapter-list">${Array.from({ length: b.chapters }, (_, i) => {
+        ${open ? `<div class="chapter-grid">${Array.from({ length: b.chapters }, (_, i) => {
           const c = i + 1, k = `${b.id}:${c}`, s = state.summary[k];
           const hasText = s && s.verses.length;
-          const cls = ['ch-row', b.id === state.book && c === state.chapter ? 'current' : '', hasText ? '' : 'no-text'].join(' ').trim();
-          return `<button data-b="${b.id}" data-c="${c}" class="${cls}">
-            <span class="ch-num">${c}</span>
-            <span class="ch-label">${s && s.name ? esc(s.name) : hasText ? `Capítulo ${c}` : 'Sin texto todavía'}</span>
-            ${withComments.has(k) ? '<span class="ch-dot" title="Tiene comentarios"></span>' : ''}
-          </button>`;
+          const cls = [b.id === state.book && c === state.chapter ? 'current' : '', hasText ? '' : 'no-text', withComments.has(k) ? 'has-c' : ''].join(' ').trim();
+          return `<button data-b="${b.id}" data-c="${c}" class="${cls}" title="${s && s.name ? esc(s.name) : hasText ? `Capítulo ${c}` : 'Sin texto todavía'}">${c}</button>`;
         }).join('')}</div>` : ''}`;
     }).join('');
   }

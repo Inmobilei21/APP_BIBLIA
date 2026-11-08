@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "2.8",
+      "date": "2026-11-08",
+      "changes": [
+        "En el menú vuelven los cuadraditos con el número de cada capítulo; el nombre del capítulo se ve al abrirlo.",
+        "Mientras escribes un comentario ya puedes arrastrar la página hacia arriba o hacia abajo sin que vuelva sola a su sitio."
+      ]
+    },
+    {
       "version": "2.7",
       "date": "2026-11-08",
       "changes": [
