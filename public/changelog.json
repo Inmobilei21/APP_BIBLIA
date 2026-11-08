@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "2.4",
+      "date": "2026-11-08",
+      "changes": [
+        "Al escribir un comentario, el versículo se queda arriba de la pantalla y el cuadro justo debajo, por encima del teclado: puedes leer el versículo mientras escribes."
+      ]
+    },
+    {
       "version": "2.3",
       "date": "2026-11-08",
       "changes": [

@@ -113,14 +113,21 @@
   }
   const fmtDate = iso => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   // Cuadro de texto que crece al escribir, hasta unas 20 líneas visibles
+  const FORM_BUTTONS = 64;   // alto aproximado de la fila de botones bajo el cuadro
+  // Zona de la página que se ve realmente (descontando el teclado del móvil)
+  function visibleArea() {
+    const vv = window.visualViewport;
+    return vv ? { top: vv.offsetTop, bottom: vv.offsetTop + vv.height } : { top: 0, bottom: window.innerHeight };
+  }
   function autosize(ta) {
     const cs = getComputedStyle(ta);
     const line = parseFloat(cs.lineHeight) || 26;
     const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + 2;
     let max = line * 20 + pad;
     // Con el teclado abierto, que el cuadro y los botones quepan en el hueco visible
-    if (document.activeElement === ta && window.visualViewport) {
-      const avail = window.visualViewport.height - $('.topbar').offsetHeight - 90;
+    // Con el teclado abierto: que el cuadro y los botones quepan en lo que queda visible por debajo
+    if (document.activeElement === ta) {
+      const avail = visibleArea().bottom - ta.getBoundingClientRect().top - FORM_BUTTONS;
       max = Math.min(max, Math.max(line * 4 + pad, avail));
     }
     ta.style.height = 'auto';
@@ -129,14 +136,23 @@
     ta.style.overflowY = ta.scrollHeight + 2 > max ? 'auto' : 'hidden';
   }
   document.addEventListener('input', e => { if (e.target.matches('textarea.grow')) autosize(e.target); });
-  // Al abrir un cuadro de edición: subirlo a la parte de arriba de la pantalla, por encima del teclado
-  function editAtTop(ta) {
+  // Al abrir un cuadro de edición: el versículo arriba de la pantalla y el cuadro justo debajo,
+  // todo por encima del teclado. Si el versículo es muy largo, se ve su final junto al cuadro.
+  function editBelowVerse(ta) {
+    const el = ta.closest('.block');
     const place = () => {
+      const header = $('.topbar').offsetHeight, vis = visibleArea();
+      const line = parseFloat(getComputedStyle(ta).lineHeight) || 26;
+      const minBox = line * 4 + 24;
+      let delta = el.getBoundingClientRect().top - (Math.max(header, vis.top) + 8);
+      const boxTop = ta.getBoundingClientRect().top - delta;
+      const limit = vis.bottom - minBox - FORM_BUTTONS;
+      if (boxTop > limit) delta += boxTop - limit;
+      window.scrollBy(0, delta);
       autosize(ta);
-      const header = $('.topbar').offsetHeight;
-      window.scrollTo(0, window.scrollY + ta.getBoundingClientRect().top - header - 12);
     };
-    document.body.classList.add('editing');   // espacio extra al final para poder subir el cuadro
+    document.body.classList.add('editing');   // espacio extra al final para poder subir el versículo
+    el.classList.add('writing');              // mientras se escribe, se ocultan las opciones y el comentario antiguo
     ta.focus({ preventScroll: true });
     ta.setSelectionRange(ta.value.length, ta.value.length);
     place();
@@ -294,6 +310,7 @@
     state.active = null;
     document.body.classList.remove('editing');
     if (!el) return;
+    el.classList.remove('writing');
     el.classList.remove('active');
     el.querySelector('.vactions')?.remove();
     revealTop(el);
@@ -342,7 +359,7 @@
         <textarea class="ctext grow" placeholder="Escribe aquí tu comentario…" aria-label="Comentario">${existing ? esc(existing.text) : ''}</textarea>
         <div class="form-row">${commentRow(existing)}</div>
       </div>`;
-    editAtTop(box.querySelector('textarea'));
+    editBelowVerse(box.querySelector('textarea'));
   }
   // Al guardar se cierra el cuadro de edición: queda el comentario y las opciones (con «Editar comentario»)
   async function saveComment(box) {
@@ -363,6 +380,7 @@
       box.querySelector('.slot').innerHTML = '';
       document.activeElement?.blur();
       document.body.classList.remove('editing');
+      el.classList.remove('writing');
       revealTop(el);
       toast('Comentario guardado');
     } catch (e) {
@@ -395,7 +413,7 @@
           <button class="btn primary" data-act="save-text">Guardar texto</button>
         </div>
       </div>`;
-    editAtTop(box.querySelector('textarea'));
+    editBelowVerse(box.querySelector('textarea'));
   }
   async function saveText(box) {
     const el = activeEl(); const { v } = infoOf(el);

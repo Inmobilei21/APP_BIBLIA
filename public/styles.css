@@ -356,3 +356,5 @@ textarea.grow { min-height: 120px; resize: none; line-height: 1.6; }
 .editor-status.info { color: #8a5a00; }
 .idx-sub { display: block; font-size: 13px; color: var(--ink-soft); }
 body.editing main { padding-bottom: 70vh; }
+.block.writing .actions, .block.writing > .vcomment { display: none; }
+.block.writing .form { margin-top: 8px; }
