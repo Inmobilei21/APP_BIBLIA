@@ -483,18 +483,22 @@ body.editing .scroll-btn { display: none; }
 }
 
 /* ---------- v3.1: pasar página, botón de bajar centrado y PDF ---------- */
-/* La hoja que gira sobre su lomo al cambiar de capítulo */
-.leaf-stage { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; perspective: 1800px; pointer-events: none; overflow: hidden; }
-.leaf {
-  position: absolute; inset: 0; background: var(--paper); overflow: hidden;
-  backface-visibility: hidden; -webkit-backface-visibility: hidden; will-change: transform;
-  box-shadow: 0 0 40px rgba(70, 50, 0, .25);
+/* La hoja que gira sobre su lomo (a la izquierda) al cambiar de capítulo */
+.leaf-stage { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; perspective: 2200px; perspective-origin: 0 50%; pointer-events: none; overflow: hidden; }
+.leaf-page { position: absolute; inset: 0; overflow: hidden; background: var(--paper); contain: paint; }
+.leaf { position: absolute; inset: 0; transform-origin: left center; will-change: transform; transform-style: preserve-3d; }
+.leaf-face, .leaf-back {
+  position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  box-shadow: 0 0 30px rgba(70, 50, 0, .2);
 }
-.leaf-next { transform-origin: left center; }
-.leaf-prev { transform-origin: right center; }
-.leaf-shade { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
-.leaf-next .leaf-shade { background: linear-gradient(to left, rgba(70, 50, 0, .45), rgba(70, 50, 0, .08) 45%, rgba(70, 50, 0, 0) 70%); }
-.leaf-prev .leaf-shade { background: linear-gradient(to right, rgba(70, 50, 0, .45), rgba(70, 50, 0, .08) 45%, rgba(70, 50, 0, 0) 70%); }
+/* Reverso de la hoja: papel liso con un leve degradado */
+.leaf-back { transform: rotateY(180deg); background: linear-gradient(to right, #f4efe2, #fbf8f0 30%, #fffdf8); }
+.leaf-back .leaf-shade { background: linear-gradient(to right, rgba(70, 50, 0, .35), rgba(70, 50, 0, 0) 60%); }
+.leaf-shade {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(to left, rgba(70, 50, 0, .5), rgba(70, 50, 0, .12) 40%, rgba(70, 50, 0, 0) 75%);
+}
+.leaf-cast { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: #2a1e05; }
 body.flipping .scroll-btn { display: none; }
 
 /* Ventana de exportar PDF */

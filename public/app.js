@@ -256,11 +256,7 @@
   async function renderChapter() {
     const { book: b, chapter: c } = state;
     const book = bookOf(b);
-    const setTitle = name => {
-      $('#chapterTitle').innerHTML = book.topic
-        ? `<small>Tema</small>${esc(book.name)}`
-        : `<small>${esc(book.name)}</small>Capítulo ${c}${name ? `<span class="ch-name">${esc(name)}</span>` : ''}`;
-    };
+    const setTitle = name => { $('#chapterTitle').innerHTML = titleHtml(book, c, name); };
     setTitle(state.summary[`${b}:${c}`]?.name);
     document.title = book.topic ? `${book.name} · Evangelio` : `${book.short} ${c} · Evangelio`;
     $('#editChapterBtn').textContent = book.topic ? 'Editar tema' : 'Editar capítulo';
@@ -280,7 +276,21 @@
       </div>${book.topic ? mentionsHtml(book) : ''}`;
       return;
     }
-    wrap.innerHTML = withTargets(doc.blocks).map(x => {
+    wrap.innerHTML = blocksHtml(b, c, doc);
+    if (book.topic) wrap.insertAdjacentHTML('beforeend', mentionsHtml(book));
+    // se cargan ya los capítulos de al lado, para que pasar la página sea inmediato
+    for (const d of [-1, 1]) { const n = neighbour(d); if (n) loadChapter(n.b, n.c).catch(() => {}); }
+  }
+  function titleHtml(book, c, name) {
+    return book.topic
+      ? `<small>Tema</small>${esc(book.name)}`
+      : `<small>${esc(book.name)}</small>Capítulo ${c}${name ? `<span class="ch-name">${esc(name)}</span>` : ''}`;
+  }
+  // Texto del capítulo (limit: solo los primeros bloques, para dibujar una hoja por adelantado)
+  function blocksHtml(b, c, doc, limit) {
+    const book = bookOf(b);
+    const list = withTargets(doc.blocks);
+    return (limit ? list.slice(0, limit) : list).map(x => {
       if (x.t === 'v') return `
       <section class="verse block${book.topic ? ' para' : ''}" id="v${x.n}" data-v="${x.n}" data-tg="" tabindex="0" aria-label="${book.topic ? 'Párrafo' : 'Versículo ' + x.n}">
         ${ribbonHtml(b, c, x.n)}${book.topic ? '' : `<span class="vnum">${x.n}</span>`}<span class="vtext">${esc(x.text)}</span>${extrasHtml(b, c, x.n, '')}
@@ -291,7 +301,6 @@
         <span class="btext">${esc(x.text)}</span>${extrasHtml(b, c, x.v, x.tg)}
       </div>`;
     }).join('');
-    if (book.topic) wrap.insertAdjacentHTML('beforeend', mentionsHtml(book));
   }
   // Punto en la esquina + comentario (oculto hasta pulsar)
   function extrasHtml(b, c, v, tg) {
@@ -874,49 +883,124 @@
   // En iOS el gesto sobre la capa oscura podría mover el fondo: se bloquea
   scrim.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
 
-  // Gestos horizontales:
-  //  · con el menú cerrado: deslizar a la izquierda → capítulo siguiente; a la derecha → anterior,
-  //    con efecto de pasar una página de verdad (la hoja gira sobre su lomo y descubre la siguiente).
-  //  · con el menú abierto: deslizar a la izquierda lo cierra.
+  // Gestos horizontales, como en un libro:
+  //  · deslizar a la izquierda → la hoja actual se levanta por la derecha y gira sobre el lomo, descubriendo la siguiente;
+  //  · deslizar a la derecha → la hoja anterior viene desde la izquierda y cae sobre la actual;
+  //  · con el menú abierto, deslizar a la izquierda lo cierra.
+  // Las hojas son copias ligeras (solo lo que se ve) en una capa encima; el capítulo real solo cambia al terminar.
   (() => {
     const reader = $('#reader');
     let sx = 0, sy = 0, dir = null, mode = null, w = 0, dx = 0, t0 = 0, busy = false;
-    let flip = null;   // hoja que se está pasando: { wrap, page, shade, d, from, y, loading }
+    let vx = 0, lastX = 0, lastT = 0;   // velocidad del dedo
+    let flip = null, raf = 0;
     const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid, .vactions, .mention-menu') ||
       document.querySelector('.modal-scrim:not([hidden])') || document.body.classList.contains('editing');
-    // Copia de la página actual tal como se ve, que será la hoja que gira
-    function makeLeaf(d) {
-      const rect = reader.getBoundingClientRect(), top = $('.topbar').offsetHeight;
-      const wrap = document.createElement('div');
-      wrap.className = 'leaf-stage';
-      wrap.style.top = top + 'px';
-      const page = document.createElement('div');
-      page.className = 'leaf ' + (d > 0 ? 'leaf-next' : 'leaf-prev');
+    const headerH = () => $('.topbar').offsetHeight;
+
+    // Copia de lo que se ve ahora de la página (sin los bloques que quedan fuera de la pantalla)
+    function currentPage() {
+      const rect = reader.getBoundingClientRect(), top = headerH();
       const clone = reader.cloneNode(true);
-      clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
-      clone.style.cssText = `position:absolute; left:${rect.left}px; top:${rect.top - top}px; width:${rect.width}px; margin:0; transform:none; opacity:1;`;
-      const shade = document.createElement('div'); shade.className = 'leaf-shade';
-      page.append(clone, shade);
-      wrap.append(page);
-      document.body.append(wrap);
-      return { wrap, page, shade };
+      clone.removeAttribute('id');
+      const live = [...$('#verses').children], copy = [...clone.querySelector('.verses').children];
+      let first = live.findIndex(el => el.getBoundingClientRect().bottom > top);
+      const last = live.findIndex(el => el.getBoundingClientRect().top > window.innerHeight);
+      if (last > -1) copy.slice(last + 1).forEach(el => el.remove());
+      if (first > 0) {
+        const spacer = document.createElement('div');
+        spacer.style.height = (live[first].getBoundingClientRect().top - live[0].getBoundingClientRect().top) + 'px';
+        copy.slice(0, first).forEach(el => el.remove());
+        clone.querySelector('.verses').prepend(spacer);
+      }
+      clone.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
+      clone.querySelectorAll('.vactions').forEach(x => x.remove());
+      clone.querySelectorAll('.active').forEach(x => x.classList.remove('active'));
+      return place(clone, rect.left, rect.top - top, rect.width);
     }
-    const setAngle = (f, p) => {   // p: 0 (plana) → 1 (pasada)
-      const ang = Math.max(0, Math.min(1, p)) * 180 * (f.d > 0 ? -1 : 1);
-      f.page.style.transform = `rotateY(${ang}deg)`;
-      f.shade.style.opacity = String(Math.min(0.55, Math.abs(Math.sin(ang * Math.PI / 180)) * 0.6));
-      f.wrap.style.setProperty('--cast', String(Math.min(0.35, p * 0.6)));
-    };
+    // Hoja del capítulo de destino, tal como se verá al llegar (desde el principio)
+    function targetPage(n) {
+      const book = bookOf(n.b), doc = state.texts.get(`${n.b}:${n.c}`) || { name: '', blocks: [] };
+      const rect = reader.getBoundingClientRect(), top = headerH();
+      const clone = reader.cloneNode(true);
+      clone.removeAttribute('id');
+      clone.querySelector('.chapter-title').innerHTML = titleHtml(book, n.c, doc.name);
+      clone.querySelector('.verses').innerHTML = doc.blocks.length ? blocksHtml(n.b, n.c, doc, 25)
+        : `<div class="empty-chapter"><p>${book.topic ? 'Este tema aún no tiene contenido.' : 'Este capítulo aún no tiene texto.'}</p></div>`;
+      clone.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
+      const docTop = rect.top + window.scrollY;   // posición del lector con la página arriba del todo
+      return place(clone, rect.left, docTop - top, rect.width);
+    }
+    function place(clone, left, top, width) {
+      clone.style.cssText = `position:absolute; left:${left}px; top:${top}px; width:${width}px; margin:0; transform:none; opacity:1; transition:none;`;
+      const page = document.createElement('div');
+      page.className = 'leaf-page';
+      page.append(clone);
+      return page;
+    }
     async function startFlip(d) {
-      const from = { b: state.book, c: state.chapter }, y = window.scrollY;
-      const leaf = makeLeaf(d);
-      flip = { ...leaf, d, from, y };
-      // debajo se prepara ya el capítulo nuevo, para que aparezca al levantar la hoja
-      flip.loading = step(d);
+      const n = neighbour(d);
+      if (!state.texts.has(`${n.b}:${n.c}`)) { try { await loadChapter(n.b, n.c); } catch { /* se dibuja vacía */ } }
+      if (flip !== 'starting') return;   // el dedo ya se soltó: no se dibuja nada
+      const stage = document.createElement('div');
+      stage.className = 'leaf-stage';
+      stage.style.top = headerH() + 'px';
+      const cast = document.createElement('div'); cast.className = 'leaf-cast';
+      // La hoja tiene dos caras: el anverso (la página) y el reverso (papel), como una hoja de verdad
+      const leaf = document.createElement('div'); leaf.className = 'leaf';
+      const front = document.createElement('div'); front.className = 'leaf-face';
+      const back = document.createElement('div'); back.className = 'leaf-back';
+      const shade = document.createElement('div'); shade.className = 'leaf-shade';
+      const backShade = document.createElement('div'); backShade.className = 'leaf-shade';
+      back.append(backShade);
+      if (d > 0) {
+        // debajo: la página siguiente; encima: la actual, que se levanta
+        const under = targetPage(n); under.classList.add('leaf-under');
+        front.append(currentPage(), shade);
+        stage.append(under, cast, leaf);
+      } else {
+        // debajo queda la página real; encima: la anterior, que llega desde la izquierda
+        front.append(targetPage(n), shade);
+        stage.append(cast, leaf);
+      }
+      leaf.append(back, front);
+      document.body.append(stage);
       document.body.classList.add('flipping');
+      flip = { stage, leaf, shade, backShade, cast, d, n, p: 0 };
+      render(progress());
     }
-    // Los movimientos se escuchan en el propio elemento tocado: al preparar el capítulo nuevo debajo,
-    // ese elemento sale de la página y sus eventos ya no llegarían al documento.
+    // p: 0 = sin pasar, 1 = pasada
+    function render(p) {
+      if (!flip) return;
+      p = Math.max(0, Math.min(1, p)); flip.p = p;
+      const ang = flip.d > 0 ? -180 * p : -180 * (1 - p);
+      flip.leaf.style.transform = `rotateY(${ang}deg)`;
+      const edge = Math.abs(Math.sin(ang * Math.PI / 180));   // 1 cuando la hoja está de canto
+      flip.shade.style.opacity = String(edge * 0.5);
+      flip.backShade.style.opacity = String(edge * 0.35);
+      // sombra que la hoja proyecta sobre la página de abajo: máxima con la hoja levantada
+      flip.cast.style.opacity = String(edge * 0.1);
+    }
+    const progress = () => Math.max(0, (flip && flip.d > 0 ? -dx : dx)) / (w * 0.85);
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(progress()); }); };
+
+    // Animación hasta el final (p = 1) o de vuelta (p = 0), con la velocidad del dedo
+    function animateTo(target) {
+      return new Promise(done => {
+        const from = flip.p, dist = Math.abs(target - from);
+        const speed = Math.min(3.5, Math.max(1.4, Math.abs(vx) * 2.2));   // fracción de hoja por segundo
+        const dur = Math.max(160, Math.min(520, (dist / speed) * 1000));
+        const start = performance.now();
+        const ease = t => 1 - Math.pow(1 - t, 3);
+        const tick = now => {
+          const t = Math.min(1, (now - start) / dur);
+          render(from + (target - from) * ease(t));
+          if (t < 1) requestAnimationFrame(tick); else done();
+        };
+        requestAnimationFrame(tick);
+      });
+    }
+
+    // Los movimientos se escuchan en el elemento tocado
     let target = null;
     const detach = () => {
       if (!target) return;
@@ -926,8 +1010,8 @@
     document.addEventListener('touchstart', e => {
       detach();
       if (busy || e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
-      sx = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = Date.now();
-      dir = null; dx = 0;
+      sx = lastX = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = lastT = performance.now();
+      dir = null; dx = 0; vx = 0;
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
       target = e.target;
@@ -936,13 +1020,15 @@
     }, { passive: true });
     function move(e) {
       if (dir === 'none') return;
-      const x = e.touches[0].clientX - sx, y = e.touches[0].clientY - sy;
+      const tx = e.touches[0].clientX, x = tx - sx, y = e.touches[0].clientY - sy;
+      const now = performance.now();
+      if (now > lastT) { vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000); lastX = tx; lastT = now; }
       if (!dir) {
         if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
         dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
         if (dir !== 'h') return;
         if (mode === 'drawer') drawer.style.transition = 'none';
-        else if (neighbour(x < 0 ? 1 : -1)) startFlip(x < 0 ? 1 : -1);
+        else if (neighbour(x < 0 ? 1 : -1)) { busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
         else reader.style.transition = 'none';
       }
       dx = x;
@@ -950,43 +1036,41 @@
         const off = Math.min(0, dx);
         drawer.style.transform = `translateX(${off}px)`;
         scrim.style.opacity = String(Math.max(0, 1 + off / w));
-      } else if (flip) {
-        setAngle(flip, (flip.d > 0 ? -dx : dx) / (w * 0.9));
-      } else {
-        reader.style.transform = `translateX(${dx / 4}px)`;   // no hay más capítulos: el texto se resiste
-      }
+      } else if (flip && flip !== 'starting') schedule();
+      else if (!flip) reader.style.transform = `translateX(${dx / 4}px)`;   // no hay más capítulos: el texto se resiste
     }
     async function end() {
       detach();
       if (dir !== 'h') { dir = null; return; }
       dir = null;
-      const fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;   // gesto rápido (px/ms)
       if (mode === 'drawer') {
+        const fast = dx / Math.max(1, performance.now() - t0) < -0.5;
         const close = dx < -w / 3 || (fast && dx < -30);
         drawer.style.transition = ''; drawer.style.transform = ''; scrim.style.opacity = '';
         if (close) closeDrawer();
         return;
       }
       if (!flip) {
-        reader.style.transition = 'transform .2s ease'; reader.style.transform = '';
-        setTimeout(() => { reader.style.transition = ''; }, 220);
+        reader.style.transition = 'transform .25s cubic-bezier(.2,.8,.3,1)'; reader.style.transform = '';
+        setTimeout(() => { reader.style.transition = ''; }, 260);
         return;
       }
-      const f = flip; flip = null; busy = true;
-      const pulled = (f.d > 0 ? -dx : dx);
-      const commit = pulled > w * 0.25 || (fast && pulled > 40);
-      f.page.style.transition = 'transform .38s cubic-bezier(.3,.7,.4,1)';
-      f.shade.style.transition = 'opacity .38s ease';
-      f.wrap.style.transition = '--cast .38s';
-      try { await f.loading; } catch { /* sin conexión: se vuelve atrás */ }
+      // si la hoja aún se estaba preparando, se espera un instante
+      for (let i = 0; i < 40 && flip === 'starting'; i++) await new Promise(r => setTimeout(r, 15));
+      if (!flip || flip === 'starting') { flip = null; busy = false; return; }
+      cancelAnimationFrame(raf); raf = 0;
+      const f = flip;
+      const towards = f.d > 0 ? -vx : vx;   // velocidad en el sentido de pasar la hoja
+      const commit = f.p > 0.35 || (towards > 0.6 && f.p > 0.05);
       if (commit) {
-        setAngle(f, 1);
+        await animateTo(1);
+        await go(f.n.b, f.n.c);   // el capítulo real queda igual que la hoja que se ve
+        window.scrollTo(0, 0);
       } else {
-        // se suelta sin pasar la hoja: vuelve el capítulo de antes
-        await go(f.from.b, f.from.c); window.scrollTo(0, f.y);
-        setAngle(f, 0);
+        await animateTo(0);
       }
-      setTimeout(() => { f.wrap.remove(); document.body.classList.remove('flipping'); busy = false; }, 400);
+      f.stage.remove(); flip = null; busy = false;
+      document.body.classList.remove('flipping');
     }
   })();
 

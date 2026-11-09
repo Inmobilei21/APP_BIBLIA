@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "3.2",
+      "date": "2026-11-09",
+      "changes": [
+        "Pasar página más fluido y como en un libro: hacia delante, la hoja se levanta y gira sobre el lomo; hacia atrás, la hoja anterior llega desde la izquierda y cae sobre la actual.",
+        "Si sueltas a medias, la hoja vuelve suavemente a su sitio sin recargar nada."
+      ]
+    },
+    {
       "version": "3.1",
       "date": "2026-11-09",
       "changes": [
