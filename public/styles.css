@@ -524,3 +524,9 @@ body.flipping .scroll-btn { display: none; }
 .curl-under-shade { height: 70px; background: linear-gradient(to bottom, rgba(40, 28, 0, .32), rgba(40, 28, 0, .08) 45%, rgba(40, 28, 0, 0)); }
 .curl-front-shade { height: 50px; background: linear-gradient(to top, rgba(40, 28, 0, .18), rgba(40, 28, 0, 0)); }
 .curl-back-shade { height: 90px; background: linear-gradient(to bottom, rgba(40, 28, 0, .22), rgba(255, 255, 255, .35) 35%, rgba(40, 28, 0, .06) 70%, rgba(40, 28, 0, 0)); }
+
+/* ---------- v3.5: el encabezado no se mueve al pasar página ---------- */
+/* sin rebote al tirar de la página arriba o abajo del todo */
+html, body { overscroll-behavior-y: none; }
+/* mientras se pasa la hoja, la página no se desplaza */
+body.flipping { touch-action: none; }

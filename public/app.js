@@ -1048,12 +1048,16 @@
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
       target = e.target;
-      target.addEventListener('touchmove', move, { passive: true });
+      // no pasivo: así se puede impedir que el iPhone desplace la página mientras se pasa la hoja
+      target.addEventListener('touchmove', move, { passive: false });
       target.addEventListener('touchend', end); target.addEventListener('touchcancel', end);
     }, { passive: true });
     function move(e) {
       if (dir === 'none') return;
       const tx = e.touches[0].clientX, x = tx - sx, y = e.touches[0].clientY - sy;
+      // gesto horizontal (o que lo parece desde el principio): la página no se desplaza ni rebota,
+      // así el encabezado no se mueve mientras se pasa la hoja
+      if (e.cancelable && (dir === 'h' || (!dir && Math.abs(x) > Math.abs(y)))) e.preventDefault();
       const now = performance.now();
       if (now > lastT) { vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000); lastX = tx; lastT = now; }
       if (!dir) {

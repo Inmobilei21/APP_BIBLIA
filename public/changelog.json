@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "3.5",
+      "date": "2026-11-10",
+      "changes": [
+        "Al pasar página el encabezado ya no se mueve: la página queda quieta mientras doblas la hoja, aunque deslices un poco en diagonal."
+      ]
+    },
+    {
       "version": "3.4",
       "date": "2026-11-09",
       "changes": [
