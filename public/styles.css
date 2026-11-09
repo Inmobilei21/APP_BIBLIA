@@ -377,3 +377,50 @@ body.editing main { padding-bottom: 70vh; }
 .claude-status.rejected { background: #f3dcd8; color: var(--danger); }
 .claude-text { font-size: 15px; white-space: pre-wrap; word-wrap: break-word; }
 .claude-reply { font-size: 14px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); white-space: pre-wrap; }
+
+/* ---------- v2.9 ---------- */
+.chapter-nav { justify-content: center; }
+#reader { will-change: transform; }
+
+.chapter-foot { justify-content: center; gap: 22px; flex-wrap: wrap; }
+.foot-link { border: 0; background: none; color: var(--ink-soft); font-size: 14px; text-decoration: underline; padding: 6px; }
+.foot-link:hover { color: var(--gold-deep); }
+
+/* Ir al final / al principio */
+.scroll-btn {
+  position: fixed; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 25;
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  border: 1px solid var(--gold-light); background: rgba(255,255,255,.94); backdrop-filter: blur(6px);
+  box-shadow: 0 4px 14px rgba(95, 70, 10, .18); color: var(--gold-deep);
+}
+.scroll-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.scroll-btn.up svg { transform: rotate(180deg); }
+.scroll-btn:active { background: var(--gold-pale); }
+body.editing .scroll-btn { display: none; }
+
+.claude-link svg.stroke { fill: none; stroke: var(--gold); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Exportar capítulo en PDF ---------- */
+@media print {
+  @page { margin: 16mm 15mm; }
+  body.print-chapter { background: #fff; font-size: 12pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.print-chapter .topbar, body.print-chapter .drawer, body.print-chapter .scrim, body.print-chapter .chapter-foot,
+  body.print-chapter .toast, body.print-chapter .scroll-btn, body.print-chapter .update-bar, body.print-chapter .modal-scrim,
+  body.print-chapter .vactions, body.print-chapter .dot, body.print-chapter .vribbon { display: none !important; }
+  body.print-chapter main { max-width: none; padding: 0; transform: none !important; opacity: 1 !important; }
+  body.print-chapter .chapter-title { font-size: 22pt; padding: 0; }
+  body.print-chapter .chapter-title small { font-size: 9pt; }
+  body.print-chapter .ch-name { font-size: 12pt; }
+  body.print-chapter .verse, body.print-chapter .section-title, body.print-chapter .division {
+    background: none !important; border: 0 !important; padding: 2pt 0; margin: 0 0 4pt; break-inside: avoid;
+  }
+  body.print-chapter .section-title { margin-top: 12pt; font-size: 13pt; break-after: avoid; }
+  body.print-chapter .division { margin: 16pt 0 8pt; font-size: 11pt; break-after: avoid; }
+  body.print-chapter .vnum { font-size: 8pt; }
+  body.print-chapter .vtext { font-size: 12pt; line-height: 1.55; }
+  body.print-chapter .vcomment { display: none !important; }
+  body.print-chapter.print-comments .vcomment {
+    display: block !important; margin: 3pt 0 6pt 10pt; padding-left: 8pt; border-left: 2px solid #b08a2e;
+    font-size: 10.5pt; color: #5a5040; font-style: italic;
+  }
+}

@@ -71,25 +71,31 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
       Pedir un cambio a Claude
     </button>
+    <button class="claude-link" id="backupBtn">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
+      Copia de seguridad (Excel)
+    </button>
     <button class="news-link" id="newsBtn">Novedades <span id="appVersion"></span></button>
   </nav>
 
   <main id="reader">
     <div class="chapter-nav">
-      <button class="nav-arrow" id="prevCh" aria-label="Capítulo anterior">‹</button>
       <button class="chapter-title" id="chapterTitle" title="Elegir libro y capítulo"></button>
-      <button class="nav-arrow" id="nextCh" aria-label="Capítulo siguiente">›</button>
     </div>
     <div class="ornament" aria-hidden="true">✠</div>
     <article id="verses" class="verses" aria-live="polite"></article>
     <div class="chapter-foot">
-      <button class="btn ghost" id="prevCh2">‹ Anterior</button>
-      <button class="edit-chapter" id="editChapterBtn">Editar capítulo</button>
-      <button class="btn ghost" id="nextCh2">Siguiente ›</button>
+      <button class="foot-link" id="editChapterBtn">Editar capítulo</button>
+      <button class="foot-link" id="pdfChapterBtn">Exportar capítulo en PDF</button>
     </div>
   </main>
 
   <div id="toast" class="toast" role="status" hidden></div>
+
+  <!-- Ir al final / al principio del capítulo -->
+  <button class="scroll-btn" id="scrollBtn" aria-label="Ir al final" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+  </button>
 
   <div class="update-bar" id="updateBar" role="status" hidden>
     <span>Nueva versión disponible</span>
@@ -158,6 +164,27 @@
           <h3 class="claude-sub">Tus peticiones</h3>
           <div id="claudeList" class="claude-list"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-scrim" id="backupModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="backupTitle">
+      <div class="modal-head">
+        <h2 id="backupTitle">Copia de seguridad</h2>
+        <button class="icon-btn" id="backupClose" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="editor-help">Descarga un archivo de Excel con todo lo que hay en la app, en hojas separadas:
+          el texto de cada capítulo, tus comentarios, la discusión, la marca de «Seguir leyendo» y las peticiones a Claude.
+          Guárdalo en Archivos, iCloud o donde prefieras.</p>
+        <div id="backupPinBox" hidden>
+          <input id="backupPin" class="editor-name" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
+        </div>
+        <div class="form-row"><button class="btn primary" id="backupDo">Descargar copia en Excel</button></div>
+        <p class="editor-status" id="backupStatus"></p>
       </div>
     </div>
   </div>

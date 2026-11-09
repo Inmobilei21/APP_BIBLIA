@@ -272,6 +272,97 @@ app.patch('/api/proposals/:id', requirePin, wrap(async (req, res) => {
   it ? res.json(it) : res.status(404).json({ error: 'No encontrada' });
 }));
 
+// ---------- Copia de seguridad en Excel (protegida con el PIN) ----------
+app.get('/api/backup.xlsx', requirePin, wrap(async (req, res) => {
+  const ExcelJS = require('exceljs');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Evangelio'; wb.created = new Date();
+  const GOLD = 'FFB08A2E', PALE = 'FFFAF4E3';
+  const bookName = id => (BOOKS.find(b => b.id === id) || {}).name || `Libro ${id}`;
+  const fmt = d => d ? new Date(d) : null;
+  function sheet(name, columns, rows) {
+    const ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] });
+    ws.columns = columns;
+    ws.addRows(rows);
+    const head = ws.getRow(1);
+    head.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    head.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GOLD } };
+    head.alignment = { vertical: 'middle' };
+    ws.eachRow((row, i) => {
+      if (i === 1) return;
+      row.alignment = { vertical: 'top', wrapText: true };
+      if (i % 2 === 0) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: PALE } };
+    });
+    if (rows.length) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+    return ws;
+  }
+  const texts = (await store.allTexts()).sort((a, b) => a.book - b.book || a.chapter - b.chapter);
+  // Texto: una fila por bloque, en el orden de lectura
+  const TYPE = { v: 'Versículo', h: 'Subtítulo', d: 'División' };
+  const textRows = [], verseText = new Map(), targetText = new Map();
+  for (const d of texts) {
+    let pending = [], last = 0;
+    const flush = n => { pending.forEach((p, i) => targetText.set(`${d.book}:${d.chapter}:${n}:t${i}`, p.text)); pending = []; };
+    for (const b of d.blocks) {
+      textRows.push({ libro: bookName(d.book), capitulo: d.chapter, nombre: d.name || '', tipo: TYPE[b.t], vers: b.t === 'v' ? b.n : null, texto: b.text });
+      if (b.t === 'v') { flush(b.n); last = b.n; verseText.set(`${d.book}:${d.chapter}:${b.n}`, b.text); }
+      else pending.push(b);
+    }
+    flush(last + 1);
+  }
+  sheet('Texto', [
+    { header: 'Libro', key: 'libro', width: 24 }, { header: 'Capítulo', key: 'capitulo', width: 10 },
+    { header: 'Nombre del capítulo', key: 'nombre', width: 28 }, { header: 'Tipo', key: 'tipo', width: 12 },
+    { header: 'Versículo', key: 'vers', width: 10 }, { header: 'Texto', key: 'texto', width: 90 },
+  ], textRows);
+  const comments = await store.list();
+  sheet('Comentarios', [
+    { header: 'Libro', key: 'libro', width: 24 }, { header: 'Capítulo', key: 'capitulo', width: 10 },
+    { header: 'Versículo', key: 'vers', width: 10 }, { header: 'Sobre', key: 'sobre', width: 30 },
+    { header: 'Texto comentado', key: 'texto', width: 60 }, { header: 'Comentario', key: 'comentario', width: 80 },
+    { header: 'Creado', key: 'creado', width: 18, style: { numFmt: 'dd/mm/yyyy hh:mm' } },
+    { header: 'Última edición', key: 'editado', width: 18, style: { numFmt: 'dd/mm/yyyy hh:mm' } },
+  ], comments.map(c => {
+    const t = c.target ? targetText.get(`${c.book}:${c.chapter}:${c.verse}:${c.target}`) : verseText.get(`${c.book}:${c.chapter}:${c.verse}`);
+    return {
+      libro: bookName(c.book), capitulo: c.chapter, vers: c.target ? null : c.verse,
+      sobre: c.target ? `Subtítulo (antes del v. ${c.verse})` : 'Versículo',
+      texto: t || '(texto ya no existe)', comentario: c.text, creado: fmt(c.createdAt), editado: fmt(c.updatedAt),
+    };
+  }));
+  sheet('Discusión', [
+    { header: 'Libro', key: 'libro', width: 24 }, { header: 'Capítulo', key: 'capitulo', width: 10 },
+    { header: 'Versículo', key: 'vers', width: 10 }, { header: 'Nombre', key: 'nombre', width: 18 },
+    { header: 'Mensaje', key: 'texto', width: 80 }, { header: 'Fecha', key: 'fecha', width: 18, style: { numFmt: 'dd/mm/yyyy hh:mm' } },
+  ], (await store.listPosts()).map(p => ({ libro: bookName(p.book), capitulo: p.chapter, vers: p.verse, nombre: p.name, texto: p.text, fecha: fmt(p.createdAt) })));
+  const bm = await store.getSetting('bookmark');
+  sheet('Marca', [
+    { header: 'Libro', key: 'libro', width: 24 }, { header: 'Capítulo', key: 'capitulo', width: 10 },
+    { header: 'Versículo', key: 'vers', width: 10 }, { header: 'Guardada', key: 'fecha', width: 18, style: { numFmt: 'dd/mm/yyyy hh:mm' } },
+  ], bm ? [{ libro: bookName(bm.book), capitulo: bm.chapter, vers: bm.verse, fecha: fmt(bm.savedAt) }] : []);
+  const ST = { pending: 'Pendiente', working: 'En curso', done: 'Hecho', rejected: 'No realizado' };
+  sheet('Peticiones a Claude', [
+    { header: 'Fecha', key: 'fecha', width: 18, style: { numFmt: 'dd/mm/yyyy hh:mm' } }, { header: 'Estado', key: 'estado', width: 14 },
+    { header: 'Petición', key: 'texto', width: 70 }, { header: 'Respuesta de Claude', key: 'resp', width: 70 },
+  ], (await store.listProposals()).map(p => ({ fecha: fmt(p.createdAt), estado: ST[p.status] || p.status, texto: p.text, resp: p.reply || '' })));
+  const info = wb.addWorksheet('Información');
+  info.columns = [{ width: 28 }, { width: 60 }];
+  info.addRows([
+    ['Copia de seguridad de', 'Evangelio (Lucas · Hechos de los apóstoles)'],
+    ['Fecha de la copia', new Date()],
+    ['Versículos con texto', textRows.filter(r => r.tipo === 'Versículo').length],
+    ['Comentarios', comments.length],
+  ]);
+  info.getColumn(1).font = { bold: true, color: { argb: GOLD } };
+  info.getCell('B2').numFmt = 'dd/mm/yyyy hh:mm';
+  const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="evangelio-copia-${stamp}.xlsx"`);
+  res.setHeader('Cache-Control', 'no-store');
+  await wb.xlsx.write(res);
+  res.end();
+}));
+
 app.get('/api/health', (req, res) => res.json({ ok: true, storage: store.kind.startsWith('archivo') ? 'file' : 'postgres' }));
 // Marcapáginas «Seguir leyendo»: solo hay uno; el nuevo sustituye al anterior
 app.get('/api/bookmark', wrap(async (req, res) => res.json(await store.getSetting('bookmark'))));

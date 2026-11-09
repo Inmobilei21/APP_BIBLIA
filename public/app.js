@@ -198,14 +198,19 @@
   function go(b, c, v) {
     const h = `#/${b}/${c}${v ? '/' + v : ''}`;
     if (location.hash !== h) history.replaceState(null, '', h);
-    route();
+    return route();
+  }
+  // Capítulo anterior (-1) o siguiente (+1); null si no hay más
+  function neighbour(dir) {
+    const bi0 = state.books.findIndex(b => b.id === state.book);
+    let bi = bi0, c = state.chapter + dir;
+    if (c < 1) { if (bi === 0) return null; bi--; c = state.books[bi].chapters; }
+    else if (c > state.books[bi].chapters) { if (bi === state.books.length - 1) return null; bi++; c = 1; }
+    return { b: state.books[bi].id, c };
   }
   function step(dir) {
-    const i = state.books.findIndex(b => b.id === state.book);
-    let bi = i, c = state.chapter + dir;
-    if (c < 1) { if (bi === 0) return; bi--; c = state.books[bi].chapters; }
-    else if (c > state.books[bi].chapters) { if (bi === state.books.length - 1) return; bi++; c = 1; }
-    go(state.books[bi].id, c);
+    const n = neighbour(dir);
+    return n ? go(n.b, n.c) : Promise.resolve();
   }
   async function route() {
     let r = parseHash() || store.get('last', null);
@@ -235,9 +240,6 @@
     };
     setTitle(state.summary[`${b}:${c}`]?.name);
     document.title = `${book.short} ${c} · Evangelio`;
-    const first = state.books[0], last = state.books[state.books.length - 1];
-    for (const id of ['prevCh', 'prevCh2']) $('#' + id).disabled = b === first.id && c === 1;
-    for (const id of ['nextCh', 'nextCh2']) $('#' + id).disabled = b === last.id && c === last.chapters;
     const wrap = $('#verses');
     wrap.innerHTML = '<p class="loading">Cargando…</p>';
     state.active = null;
@@ -703,47 +705,155 @@
   // En iOS el gesto sobre la capa oscura podría mover el fondo: se bloquea
   scrim.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
 
-  // Gesto: deslizar a la derecha abre el menú; a la izquierda lo cierra. El menú sigue al dedo.
+  // Gestos horizontales:
+  //  · con el menú cerrado: deslizar a la izquierda → capítulo siguiente; a la derecha → capítulo anterior.
+  //    El texto sigue al dedo. (Deslizar a la derecha ya no abre el menú: se abre con su botón.)
+  //  · con el menú abierto: deslizar a la izquierda lo cierra.
   (() => {
-    let sx = 0, sy = 0, dir = null, startOpen = false, w = 0, dx = 0, t0 = 0;
-    const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid') || document.querySelector('.modal-scrim:not([hidden])');
+    const reader = $('#reader');
+    let sx = 0, sy = 0, dir = null, mode = null, w = 0, dx = 0, t0 = 0, busy = false;
+    const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid, .vactions') ||
+      document.querySelector('.modal-scrim:not([hidden])') || document.body.classList.contains('editing');
     document.addEventListener('touchstart', e => {
-      if (e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
+      if (busy || e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
       sx = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = Date.now();
-      dir = null; dx = 0; startOpen = drawer.classList.contains('open'); w = drawer.offsetWidth;
+      dir = null; dx = 0;
+      mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
+      w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
     }, { passive: true });
     document.addEventListener('touchmove', e => {
       if (dir === 'none') return;
       const x = e.touches[0].clientX - sx, y = e.touches[0].clientY - sy;
       if (!dir) {
         if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
-        // solo gestos claramente horizontales y en la dirección útil
-        dir = Math.abs(x) > Math.abs(y) * 1.3 && (startOpen ? x < 0 : x > 0) ? 'h' : 'none';
+        dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
         if (dir !== 'h') return;
-        drawer.style.transition = 'none';
-        scrim.hidden = false; scrim.style.animation = 'none';
+        if (mode === 'drawer') drawer.style.transition = 'none';
+        else reader.style.transition = 'none';
       }
       dx = x;
-      const off = startOpen ? Math.min(0, dx) : Math.min(0, -w + dx);   // desplazamiento del menú (0 = abierto)
-      drawer.style.transform = `translateX(${off}px)`;
-      scrim.style.opacity = String(Math.max(0, 1 + off / w));
+      if (mode === 'drawer') {
+        const off = Math.min(0, dx);
+        drawer.style.transform = `translateX(${off}px)`;
+        scrim.style.opacity = String(Math.max(0, 1 + off / w));
+      } else {
+        // si no hay capítulo en esa dirección, el texto se resiste (efecto goma)
+        const has = !!neighbour(dx < 0 ? 1 : -1);
+        const move = has ? dx : dx / 4;
+        reader.style.transform = `translateX(${move}px)`;
+        reader.style.opacity = String(1 - Math.min(Math.abs(move) / w, 1) * 0.5);
+      }
     }, { passive: true });
-    const end = () => {
+    const end = async () => {
       if (dir !== 'h') { dir = null; return; }
       dir = null;
       const fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;   // gesto rápido (px/ms)
-      const open = startOpen ? !(dx < -w / 3 || (fast && dx < -30)) : (dx > w / 3 || (fast && dx > 30));
-      drawer.style.transition = ''; drawer.style.transform = '';
-      scrim.style.opacity = ''; scrim.style.animation = '';
-      open ? openDrawer() : closeDrawer();
+      if (mode === 'drawer') {
+        const close = dx < -w / 3 || (fast && dx < -30);
+        drawer.style.transition = ''; drawer.style.transform = ''; scrim.style.opacity = '';
+        if (close) closeDrawer();
+        return;
+      }
+      const d = dx < 0 ? 1 : -1;
+      const change = (Math.abs(dx) > w * 0.25 || (fast && Math.abs(dx) > 40)) && neighbour(d);
+      reader.style.transition = 'transform .18s ease, opacity .18s ease';
+      if (!change) { reader.style.transform = ''; reader.style.opacity = ''; return; }
+      busy = true;
+      reader.style.transform = `translateX(${-d * w}px)`; reader.style.opacity = '0';
+      await new Promise(r => setTimeout(r, 180));
+      await step(d);
+      // el capítulo nuevo entra desde el otro lado
+      reader.style.transition = 'none';
+      reader.style.transform = `translateX(${d * w * 0.4}px)`;
+      void reader.offsetWidth;
+      reader.style.transition = 'transform .2s ease, opacity .2s ease';
+      reader.style.transform = ''; reader.style.opacity = '';
+      setTimeout(() => { reader.style.transition = ''; busy = false; }, 220);
     };
     document.addEventListener('touchend', end);
     document.addEventListener('touchcancel', end);
   })();
+
+  // ---------- Botón para ir al final o al principio ----------
+  (() => {
+    const btn = $('#scrollBtn');
+    const update = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      btn.hidden = max < 200 || document.body.classList.contains('scroll-locked');
+      const down = window.scrollY < max / 2;   // en la primera mitad baja al final; en la segunda, sube
+      btn.classList.toggle('up', !down);
+      btn.setAttribute('aria-label', down ? 'Ir al final' : 'Ir al principio');
+    };
+    btn.addEventListener('click', () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      window.scrollTo({ top: window.scrollY < max / 2 ? max : 0, behavior: 'smooth' });
+    });
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    new MutationObserver(update).observe($('#verses'), { childList: true });
+    new MutationObserver(update).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    update();
+  })();
+
+  // ---------- Exportar el capítulo en PDF (con el aspecto de la app) ----------
+  $('#pdfChapterBtn').addEventListener('click', () => {
+    closeActions();
+    const withComments = state.comments.some(c => c.book === state.book && c.chapter === state.chapter)
+      && confirm('¿Incluir tus comentarios en el PDF?\n\nAceptar: con comentarios.\nCancelar: solo el texto.');
+    const book = bookOf(state.book), doc = chapterDoc();
+    const prevTitle = document.title;
+    document.title = `${book.short} ${state.chapter}${doc.name ? ' - ' + doc.name : ''}`;   // nombre sugerido del archivo
+    document.body.classList.add('print-chapter');
+    document.body.classList.toggle('print-comments', withComments);
+    const done = () => {
+      document.body.classList.remove('print-chapter', 'print-comments');
+      document.title = prevTitle;
+      window.removeEventListener('afterprint', done);
+    };
+    window.addEventListener('afterprint', done);
+    setTimeout(() => { window.print(); setTimeout(done, 1500); }, 50);
+  });
+
+  // ---------- Copia de seguridad en Excel ----------
+  $('#backupBtn').addEventListener('click', () => {
+    closeDrawer();
+    $('#backupPinBox').hidden = !!store.get('pin', '');
+    $('#backupStatus').textContent = '';
+    $('#backupModal').hidden = false; lockScroll('backup');
+  });
+  const closeBackup = () => { $('#backupModal').hidden = true; unlockScroll('backup'); };
+  $('#backupClose').addEventListener('click', closeBackup);
+  $('#backupDo').addEventListener('click', async () => {
+    if (!$('#backupPinBox').hidden) store.set('pin', $('#backupPin').value.trim());
+    const btn = $('#backupDo'), st = $('#backupStatus');
+    btn.disabled = true; st.className = 'editor-status'; st.textContent = 'Preparando la copia…';
+    try {
+      const r = await fetch('/api/backup.xlsx', { cache: 'no-store', headers: { 'X-Owner-Token': store.get('pin', '') } });
+      if (r.status === 401) { $('#backupPinBox').hidden = false; throw new Error('PIN incorrecto'); }
+      if (!r.ok) throw new Error('Error ' + r.status);
+      const blob = await r.blob();
+      const name = (r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'evangelio-copia.xlsx';
+      const file = new File([blob], name, { type: blob.type });
+      // En el móvil: menú de compartir («Guardar en Archivos»); si no, descarga normal
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: name }); st.textContent = 'Copia lista.'; }
+        catch (e) { if (e.name !== 'AbortError') throw e; st.textContent = ''; }
+      } else {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+        st.textContent = 'Copia descargada: ' + name;
+      }
+    } catch (e) { st.className = 'editor-status warn'; st.textContent = 'No se pudo hacer la copia: ' + e.message; }
+    btn.disabled = false;
+  });
+
   $('#chapterTitle').addEventListener('click', () => { openBooks.add(state.book); openDrawer('bibleNav'); });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (!$('#claudeModal').hidden) closeClaude();
+      if (!$('#backupModal').hidden) closeBackup();
+      else if (!$('#claudeModal').hidden) closeClaude();
       else if (!$('#editorModal').hidden) closeEditor();
       else if (drawer.classList.contains('open')) closeDrawer();
       else closeActions();
@@ -969,8 +1079,6 @@
     btn.disabled = false;
   });
 
-  for (const [id, d] of [['prevCh', -1], ['prevCh2', -1], ['nextCh', 1], ['nextCh2', 1]])
-    $('#' + id).addEventListener('click', () => step(d));
   window.addEventListener('hashchange', route);
 
   // ---------- Inicio ----------
