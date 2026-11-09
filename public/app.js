@@ -890,7 +890,7 @@
   // Las hojas son copias ligeras (solo lo que se ve) en una capa encima; el capítulo real solo cambia al terminar.
   (() => {
     const reader = $('#reader');
-    let sx = 0, sy = 0, dir = null, mode = null, w = 0, dx = 0, t0 = 0, busy = false;
+    let sx = 0, sy = 0, dir = null, mode = null, w = 0, dx = 0, dy = 0, t0 = 0, busy = false;
     let vx = 0, lastX = 0, lastT = 0;   // velocidad del dedo
     let flip = null, raf = 0;
     const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid, .vactions, .mention-menu') ||
@@ -937,63 +937,96 @@
       page.append(clone);
       return page;
     }
+    // ---- Pasar página doblando la esquina, como en Apple Books ----
+    // La hoja se dobla por una línea (el pliegue) que sigue al dedo: la parte del lomo sigue plana,
+    // la parte doblada se refleja sobre el pliegue y muestra el dorso (papel con el texto en espejo, tenue).
+    // Hacia delante se descubre debajo la página siguiente; hacia atrás, la anterior se desdobla sobre la actual.
+    const el = (cls, parent) => { const d = document.createElement('div'); d.className = cls; if (parent) parent.append(d); return d; };
     async function startFlip(d) {
       const n = neighbour(d);
       if (!state.texts.has(`${n.b}:${n.c}`)) { try { await loadChapter(n.b, n.c); } catch { /* se dibuja vacía */ } }
       if (flip !== 'starting') return;   // el dedo ya se soltó: no se dibuja nada
-      const stage = document.createElement('div');
-      stage.className = 'leaf-stage';
-      stage.style.top = headerH() + 'px';
-      const cast = document.createElement('div'); cast.className = 'leaf-cast';
-      // La hoja tiene dos caras: el anverso (la página) y el reverso (papel), como una hoja de verdad
-      const leaf = document.createElement('div'); leaf.className = 'leaf';
-      const front = document.createElement('div'); front.className = 'leaf-face';
-      const back = document.createElement('div'); back.className = 'leaf-back';
-      const shade = document.createElement('div'); shade.className = 'leaf-shade';
-      const backShade = document.createElement('div'); backShade.className = 'leaf-shade';
-      back.append(backShade);
-      if (d > 0) {
-        // debajo: la página siguiente; encima: la actual, que se levanta
-        const under = targetPage(n); under.classList.add('leaf-under');
-        front.append(currentPage(), shade);
-        stage.append(under, cast, leaf);
-      } else {
-        // debajo queda la página real; encima: la anterior, que llega desde la izquierda
-        front.append(targetPage(n), shade);
-        stage.append(cast, leaf);
-      }
-      leaf.append(back, front);
+      const top = headerH();
+      const stage = el('curl-stage'); stage.style.top = top + 'px';
+      const page = () => d > 0 ? currentPage() : targetPage(n);
+      if (d > 0) { const under = targetPage(n); under.classList.add('leaf-under'); stage.append(under); }
+      const underShade = el('curl-strip curl-under-shade', stage);
+      const front = el('curl-front', stage); front.append(page());
+      const frontShade = el('curl-strip curl-front-shade', front);
+      const flapWrap = el('curl-flap-wrap', stage);
+      const back = el('curl-back', flapWrap); back.append(page());
+      el('curl-paper', back);
+      const backShade = el('curl-strip curl-back-shade', back);
       document.body.append(stage);
       document.body.classList.add('flipping');
-      flip = { stage, leaf, shade, backShade, cast, d, n, p: 0 };
+      const W = window.innerWidth, H = window.innerHeight - top;
+      flip = { stage, front, frontShade, back, backShade, underShade, d, n, p: 0, tilt: 0, tiltK: 1, y0: Math.min(H - 1, Math.max(1, sy - top)), W, H };
       render(progress());
     }
-    // p: 0 = sin pasar, 1 = pasada
-    function render(p) {
-      if (!flip) return;
-      p = Math.max(0, Math.min(1, p)); flip.p = p;
-      const ang = flip.d > 0 ? -180 * p : -180 * (1 - p);
-      flip.leaf.style.transform = `rotateY(${ang}deg)`;
-      const edge = Math.abs(Math.sin(ang * Math.PI / 180));   // 1 cuando la hoja está de canto
-      flip.shade.style.opacity = String(edge * 0.5);
-      flip.backShade.style.opacity = String(edge * 0.35);
-      // sombra que la hoja proyecta sobre la página de abajo: máxima con la hoja levantada
-      flip.cast.style.opacity = String(edge * 0.1);
+    // Recorta un polígono convexo con el semiplano s(x) >= 0
+    function clipPoly(pts, s) {
+      const out = [];
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length], sa = s(a), sb = s(b);
+        if (sa >= 0) out.push(a);
+        if ((sa >= 0) !== (sb >= 0)) { const t = sa / (sa - sb); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); }
+      }
+      return out;
     }
-    const progress = () => Math.max(0, (flip && flip.d > 0 ? -dx : dx)) / (w * 0.85);
-    const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(progress()); }); };
+    const poly = pts => pts.length > 2 ? `polygon(${pts.map(p => `${p[0].toFixed(1)}px ${p[1].toFixed(1)}px`).join(',')})` : 'polygon(0 0,0 0,0 0)';
+    // Coloca una franja de sombra a lo largo del pliegue, hacia el lado n (+1) o el contrario (-1)
+    function strip(elm, M, nx, ny, side, opacity) {
+      const phi = Math.atan2(-nx, ny) * 180 / Math.PI;
+      elm.style.transform = `translate(${M[0]}px, ${M[1]}px) rotate(${phi}deg) translate(-50%, ${side > 0 ? 0 : -100}%)`;
+      elm.style.opacity = String(opacity);
+    }
+    // p: avance de la acción (0 = como al empezar, 1 = página pasada)
+    function render(p) {
+      if (!flip || flip === 'starting') return;
+      const f = flip; p = Math.max(0, Math.min(1, p)); f.p = p;
+      const fold = f.d > 0 ? p : 1 - p;                 // cuánto está doblada la hoja que se mueve
+      const { W, H, y0 } = f;
+      const G = [W, y0];                                  // punto de la hoja que «agarra» el dedo
+      const F = [W - 2 * W * fold, y0 + f.tilt * f.tiltK * Math.min(1, fold * 4)];   // dónde está ese punto ahora
+      const gx = G[0] - F[0], gy = G[1] - F[1], len = Math.hypot(gx, gy);
+      const rect = [[0, 0], [W, 0], [W, H], [0, H]];
+      if (len < 0.5) {   // sin doblar
+        f.front.style.clipPath = 'none'; f.back.style.clipPath = poly([]);
+        [f.underShade, f.frontShade, f.backShade].forEach(x => { x.style.opacity = '0'; });
+        return;
+      }
+      const nx = gx / len, ny = gy / len, M = [(G[0] + F[0]) / 2, (G[1] + F[1]) / 2], k = M[0] * nx + M[1] * ny;
+      const sd = q => q[0] * nx + q[1] * ny - k;          // distancia con signo al pliegue (positiva hacia G)
+      f.front.style.clipPath = poly(clipPoly(rect, q => -sd(q)));
+      f.back.style.clipPath = poly(clipPoly(rect, sd));
+      // reflejo sobre el pliegue: x' = x - 2·s(x)·n
+      const a = 1 - 2 * nx * nx, b = -2 * nx * ny, d = 1 - 2 * ny * ny;
+      f.back.style.transform = `matrix(${a},${b},${b},${d},${2 * k * nx},${2 * k * ny})`;
+      const curl = Math.min(1, Math.sin(Math.PI * Math.min(1, fold)) * 1.6 + 0.15);   // intensidad de las sombras
+      strip(f.underShade, M, nx, ny, +1, curl * 0.9);    // sombra sobre la página que se descubre
+      strip(f.frontShade, M, nx, ny, -1, curl * 0.7);    // la hoja se oscurece un poco junto al pliegue
+      strip(f.backShade, M, nx, ny, +1, curl);           // curvatura del dorso
+    }
+    const progress = () => Math.max(0, (flip && flip.d > 0 ? -dx : dx) * 0.95 / w);
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (flip && flip !== 'starting') { flip.tilt = Math.max(-flip.H * 0.4, Math.min(flip.H * 0.4, dy * 1.1)); render(progress()); }
+      });
+    };
 
-    // Animación hasta el final (p = 1) o de vuelta (p = 0), con la velocidad del dedo
+    // Animación hasta el final (p = 1) o de vuelta (p = 0), con la velocidad del dedo; la hoja se endereza
     function animateTo(target) {
       return new Promise(done => {
-        const from = flip.p, dist = Math.abs(target - from);
-        const speed = Math.min(3.5, Math.max(1.4, Math.abs(vx) * 2.2));   // fracción de hoja por segundo
-        const dur = Math.max(160, Math.min(520, (dist / speed) * 1000));
+        const from = flip.p, dist = Math.abs(target - from), k0 = flip.tiltK;
+        const speed = Math.min(3.2, Math.max(1.3, Math.abs(vx) * 2));   // fracción de hoja por segundo
+        const dur = Math.max(200, Math.min(560, (dist / speed) * 1000));
         const start = performance.now();
         const ease = t => 1 - Math.pow(1 - t, 3);
         const tick = now => {
-          const t = Math.min(1, (now - start) / dur);
-          render(from + (target - from) * ease(t));
+          const t = Math.min(1, (now - start) / dur), e = ease(t);
+          flip.tiltK = k0 * (1 - e);
+          render(from + (target - from) * e);
           if (t < 1) requestAnimationFrame(tick); else done();
         };
         requestAnimationFrame(tick);
@@ -1011,7 +1044,7 @@
       detach();
       if (busy || e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
       sx = lastX = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = lastT = performance.now();
-      dir = null; dx = 0; vx = 0;
+      dir = null; dx = 0; dy = 0; vx = 0;
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
       target = e.target;
@@ -1031,7 +1064,7 @@
         else if (neighbour(x < 0 ? 1 : -1)) { busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
         else reader.style.transition = 'none';
       }
-      dx = x;
+      dx = x; dy = y;
       if (mode === 'drawer') {
         const off = Math.min(0, dx);
         drawer.style.transform = `translateX(${off}px)`;
@@ -1061,7 +1094,7 @@
       cancelAnimationFrame(raf); raf = 0;
       const f = flip;
       const towards = f.d > 0 ? -vx : vx;   // velocidad en el sentido de pasar la hoja
-      const commit = f.p > 0.35 || (towards > 0.6 && f.p > 0.05);
+      const commit = f.p > 0.3 || (towards > 0.6 && f.p > 0.04);
       if (commit) {
         await animateTo(1);
         await go(f.n.b, f.n.c);   // el capítulo real queda igual que la hoja que se ve

@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "3.4",
+      "date": "2026-11-09",
+      "changes": [
+        "Pasar página como en Apple Books: la esquina de la hoja sigue al dedo, se dobla y deja ver el dorso con el texto en espejo, con sombras en el pliegue. Si mueves el dedo en diagonal, el pliegue se inclina."
+      ]
+    },
+    {
       "version": "3.3",
       "date": "2026-11-09",
       "changes": [
