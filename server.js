@@ -512,6 +512,8 @@ app.delete('/api/comments/:id', wrap(async (req, res) => {
 }));
 
 // Sin caché para la app en sí: así cada actualización llega al momento
+// Librería para crear los PDF en el propio móvil
+app.get('/vendor/jspdf.umd.min.js', (req, res) => res.sendFile(path.join(__dirname, 'node_modules', 'jspdf', 'dist', 'jspdf.umd.min.js'), { maxAge: '30d' }));
 app.use(express.static(path.join(__dirname, 'public'), { setHeaders: res => res.setHeader('Cache-Control', 'no-cache') }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 

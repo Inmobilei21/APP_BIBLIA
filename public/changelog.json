@@ -1,6 +1,16 @@
 {
   "versions": [
     {
+      "version": "3.1",
+      "date": "2026-11-09",
+      "changes": [
+        "Al deslizar para cambiar de capítulo, la hoja gira como una página de verdad y descubre la siguiente.",
+        "El botón para bajar está ahora abajo en el centro: siempre apunta hacia el final y desaparece al llegar. Se quita el de subir.",
+        "Exportar en PDF crea un archivo PDF real con el aspecto de la app y te deja elegir dónde guardarlo («Guardar en…»).",
+        "La copia de seguridad también te deja elegir dónde guardarla."
+      ]
+    },
+    {
       "version": "3.0",
       "date": "2026-11-09",
       "changes": [

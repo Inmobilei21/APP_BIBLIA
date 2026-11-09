@@ -102,8 +102,8 @@
 
   <div id="toast" class="toast" role="status" hidden></div>
 
-  <!-- Ir al final / al principio del capítulo -->
-  <button class="scroll-btn" id="scrollBtn" aria-label="Ir al final" hidden>
+  <!-- Ir al final del capítulo -->
+  <button class="scroll-btn" id="scrollBtn" aria-label="Ir al final del capítulo" hidden>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
   </button>
 
@@ -200,8 +200,34 @@
         <div id="backupPinBox" hidden>
           <input id="backupPin" class="editor-name" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
         </div>
-        <div class="form-row"><button class="btn primary" id="backupDo">Descargar copia en Excel</button></div>
+        <div class="form-row">
+          <button class="btn primary" id="backupDo">Preparar copia en Excel</button>
+          <button class="btn primary" id="backupSave" hidden>Guardar en…</button>
+        </div>
         <p class="editor-status" id="backupStatus"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-scrim" id="pdfModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pdfTitle">
+      <div class="modal-head">
+        <h2 id="pdfTitle">Exportar en PDF</h2>
+        <button class="icon-btn" id="pdfClose" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="pdf-card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+          <div><div class="pdf-name" id="pdfName"></div><div class="pdf-sub" id="pdfSub">PDF con el aspecto de la app</div></div>
+        </div>
+        <label class="check-row" id="pdfCommentsRow"><input type="checkbox" id="pdfComments" checked> Incluir mis comentarios</label>
+        <div class="form-row">
+          <button class="btn primary" id="pdfMake">Crear PDF</button>
+          <button class="btn primary" id="pdfSave" hidden>Guardar en…</button>
+        </div>
+        <p class="editor-status" id="pdfStatus"></p>
       </div>
     </div>
   </div>

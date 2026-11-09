@@ -875,22 +875,66 @@
   scrim.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
 
   // Gestos horizontales:
-  //  · con el menú cerrado: deslizar a la izquierda → capítulo siguiente; a la derecha → capítulo anterior.
-  //    El texto sigue al dedo. (Deslizar a la derecha ya no abre el menú: se abre con su botón.)
+  //  · con el menú cerrado: deslizar a la izquierda → capítulo siguiente; a la derecha → anterior,
+  //    con efecto de pasar una página de verdad (la hoja gira sobre su lomo y descubre la siguiente).
   //  · con el menú abierto: deslizar a la izquierda lo cierra.
   (() => {
     const reader = $('#reader');
     let sx = 0, sy = 0, dir = null, mode = null, w = 0, dx = 0, t0 = 0, busy = false;
-    const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid, .vactions') ||
+    let flip = null;   // hoja que se está pasando: { wrap, page, shade, d, from, y, loading }
+    const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid, .vactions, .mention-menu') ||
       document.querySelector('.modal-scrim:not([hidden])') || document.body.classList.contains('editing');
+    // Copia de la página actual tal como se ve, que será la hoja que gira
+    function makeLeaf(d) {
+      const rect = reader.getBoundingClientRect(), top = $('.topbar').offsetHeight;
+      const wrap = document.createElement('div');
+      wrap.className = 'leaf-stage';
+      wrap.style.top = top + 'px';
+      const page = document.createElement('div');
+      page.className = 'leaf ' + (d > 0 ? 'leaf-next' : 'leaf-prev');
+      const clone = reader.cloneNode(true);
+      clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
+      clone.style.cssText = `position:absolute; left:${rect.left}px; top:${rect.top - top}px; width:${rect.width}px; margin:0; transform:none; opacity:1;`;
+      const shade = document.createElement('div'); shade.className = 'leaf-shade';
+      page.append(clone, shade);
+      wrap.append(page);
+      document.body.append(wrap);
+      return { wrap, page, shade };
+    }
+    const setAngle = (f, p) => {   // p: 0 (plana) → 1 (pasada)
+      const ang = Math.max(0, Math.min(1, p)) * 180 * (f.d > 0 ? -1 : 1);
+      f.page.style.transform = `rotateY(${ang}deg)`;
+      f.shade.style.opacity = String(Math.min(0.55, Math.abs(Math.sin(ang * Math.PI / 180)) * 0.6));
+      f.wrap.style.setProperty('--cast', String(Math.min(0.35, p * 0.6)));
+    };
+    async function startFlip(d) {
+      const from = { b: state.book, c: state.chapter }, y = window.scrollY;
+      const leaf = makeLeaf(d);
+      flip = { ...leaf, d, from, y };
+      // debajo se prepara ya el capítulo nuevo, para que aparezca al levantar la hoja
+      flip.loading = step(d);
+      document.body.classList.add('flipping');
+    }
+    // Los movimientos se escuchan en el propio elemento tocado: al preparar el capítulo nuevo debajo,
+    // ese elemento sale de la página y sus eventos ya no llegarían al documento.
+    let target = null;
+    const detach = () => {
+      if (!target) return;
+      target.removeEventListener('touchmove', move); target.removeEventListener('touchend', end); target.removeEventListener('touchcancel', end);
+      target = null;
+    };
     document.addEventListener('touchstart', e => {
+      detach();
       if (busy || e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
       sx = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = Date.now();
       dir = null; dx = 0;
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
+      target = e.target;
+      target.addEventListener('touchmove', move, { passive: true });
+      target.addEventListener('touchend', end); target.addEventListener('touchcancel', end);
     }, { passive: true });
-    document.addEventListener('touchmove', e => {
+    function move(e) {
       if (dir === 'none') return;
       const x = e.touches[0].clientX - sx, y = e.touches[0].clientY - sy;
       if (!dir) {
@@ -898,6 +942,7 @@
         dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
         if (dir !== 'h') return;
         if (mode === 'drawer') drawer.style.transition = 'none';
+        else if (neighbour(x < 0 ? 1 : -1)) startFlip(x < 0 ? 1 : -1);
         else reader.style.transition = 'none';
       }
       dx = x;
@@ -905,15 +950,14 @@
         const off = Math.min(0, dx);
         drawer.style.transform = `translateX(${off}px)`;
         scrim.style.opacity = String(Math.max(0, 1 + off / w));
+      } else if (flip) {
+        setAngle(flip, (flip.d > 0 ? -dx : dx) / (w * 0.9));
       } else {
-        // si no hay capítulo en esa dirección, el texto se resiste (efecto goma)
-        const has = !!neighbour(dx < 0 ? 1 : -1);
-        const move = has ? dx : dx / 4;
-        reader.style.transform = `translateX(${move}px)`;
-        reader.style.opacity = String(1 - Math.min(Math.abs(move) / w, 1) * 0.5);
+        reader.style.transform = `translateX(${dx / 4}px)`;   // no hay más capítulos: el texto se resiste
       }
-    }, { passive: true });
-    const end = async () => {
+    }
+    async function end() {
+      detach();
       if (dir !== 'h') { dir = null; return; }
       dir = null;
       const fast = Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;   // gesto rápido (px/ms)
@@ -923,71 +967,209 @@
         if (close) closeDrawer();
         return;
       }
-      const d = dx < 0 ? 1 : -1;
-      const change = (Math.abs(dx) > w * 0.25 || (fast && Math.abs(dx) > 40)) && neighbour(d);
-      reader.style.transition = 'transform .18s ease, opacity .18s ease';
-      if (!change) { reader.style.transform = ''; reader.style.opacity = ''; return; }
-      busy = true;
-      reader.style.transform = `translateX(${-d * w}px)`; reader.style.opacity = '0';
-      await new Promise(r => setTimeout(r, 180));
-      await step(d);
-      // el capítulo nuevo entra desde el otro lado
-      reader.style.transition = 'none';
-      reader.style.transform = `translateX(${d * w * 0.4}px)`;
-      void reader.offsetWidth;
-      reader.style.transition = 'transform .2s ease, opacity .2s ease';
-      reader.style.transform = ''; reader.style.opacity = '';
-      setTimeout(() => { reader.style.transition = ''; busy = false; }, 220);
-    };
-    document.addEventListener('touchend', end);
-    document.addEventListener('touchcancel', end);
+      if (!flip) {
+        reader.style.transition = 'transform .2s ease'; reader.style.transform = '';
+        setTimeout(() => { reader.style.transition = ''; }, 220);
+        return;
+      }
+      const f = flip; flip = null; busy = true;
+      const pulled = (f.d > 0 ? -dx : dx);
+      const commit = pulled > w * 0.25 || (fast && pulled > 40);
+      f.page.style.transition = 'transform .38s cubic-bezier(.3,.7,.4,1)';
+      f.shade.style.transition = 'opacity .38s ease';
+      f.wrap.style.transition = '--cast .38s';
+      try { await f.loading; } catch { /* sin conexión: se vuelve atrás */ }
+      if (commit) {
+        setAngle(f, 1);
+      } else {
+        // se suelta sin pasar la hoja: vuelve el capítulo de antes
+        await go(f.from.b, f.from.c); window.scrollTo(0, f.y);
+        setAngle(f, 0);
+      }
+      setTimeout(() => { f.wrap.remove(); document.body.classList.remove('flipping'); busy = false; }, 400);
+    }
   })();
 
-  // ---------- Botón para ir al final o al principio ----------
+  // ---------- Botón para bajar al final (abajo, en el centro) ----------
+  // Siempre apunta hacia el final; desaparece al llegar al final del capítulo.
   (() => {
     const btn = $('#scrollBtn');
     const update = () => {
       const max = document.documentElement.scrollHeight - window.innerHeight;
-      btn.hidden = max < 200 || document.body.classList.contains('scroll-locked');
-      const down = window.scrollY < max / 2;   // en la primera mitad baja al final; en la segunda, sube
-      btn.classList.toggle('up', !down);
-      btn.setAttribute('aria-label', down ? 'Ir al final' : 'Ir al principio');
+      btn.hidden = max < 200 || window.scrollY >= max - 40 ||
+        document.body.classList.contains('scroll-locked') || document.body.classList.contains('flipping');
     };
     btn.addEventListener('click', () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      window.scrollTo({ top: window.scrollY < max / 2 ? max : 0, behavior: 'smooth' });
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
     });
     window.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update);
-    new MutationObserver(update).observe($('#verses'), { childList: true });
+    new MutationObserver(update).observe($('#verses'), { childList: true, subtree: true });
     new MutationObserver(update).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     update();
   })();
 
-  // ---------- Exportar el capítulo en PDF (con el aspecto de la app) ----------
+  // ---------- Guardar un archivo eligiendo dónde ----------
+  // Ordenador (Chrome/Edge): ventana para elegir carpeta. iPhone/Android: menú de compartir («Guardar en Archivos»).
+  // Si no hay ninguna de las dos, se descarga.
+  async function saveFile(file) {
+    if (window.showSaveFilePicker) {
+      const ext = file.name.split('.').pop();
+      const handle = await window.showSaveFilePicker({ suggestedName: file.name, types: [{ description: ext.toUpperCase(), accept: { [file.type]: ['.' + ext] } }] });
+      const w = await handle.createWritable(); await w.write(file); await w.close();
+      return 'Guardado.';
+    }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: file.name });
+      return 'Listo.';
+    }
+    const a = document.createElement('a');
+    // en la descarga directa, nombre sin tildes (algunos navegadores lo cambian por «download»)
+    a.href = URL.createObjectURL(file); a.download = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    return 'Descargado: ' + file.name;
+  }
+  const fileName = s => s.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
+
+  // ---------- Exportar el capítulo (o el tema) en PDF, con el aspecto de la app ----------
+  let jsPDFReady = null;
+  const loadJsPDF = () => jsPDFReady || (jsPDFReady = new Promise((ok, ko) => {
+    const sc = document.createElement('script'); sc.src = '/vendor/jspdf.umd.min.js';
+    sc.onload = () => ok(window.jspdf.jsPDF); sc.onerror = () => { jsPDFReady = null; ko(new Error('No se pudo cargar el generador de PDF')); };
+    document.head.appendChild(sc);
+  }));
+  let pdfFile = null;
+  function pdfLabel() {
+    const book = bookOf(state.book), doc = chapterDoc();
+    return book.topic ? book.name : `${book.short} ${state.chapter}${doc.name ? ' - ' + doc.name : ''}`;
+  }
   $('#pdfChapterBtn').addEventListener('click', () => {
     closeActions();
-    const withComments = state.comments.some(c => c.book === state.book && c.chapter === state.chapter)
-      && confirm('¿Incluir tus comentarios en el PDF?\n\nAceptar: con comentarios.\nCancelar: solo el texto.');
-    const book = bookOf(state.book), doc = chapterDoc();
-    const prevTitle = document.title;
-    document.title = `${book.short} ${state.chapter}${doc.name ? ' - ' + doc.name : ''}`;   // nombre sugerido del archivo
-    document.body.classList.add('print-chapter');
-    document.body.classList.toggle('print-comments', withComments);
-    const done = () => {
-      document.body.classList.remove('print-chapter', 'print-comments');
-      document.title = prevTitle;
-      window.removeEventListener('afterprint', done);
-    };
-    window.addEventListener('afterprint', done);
-    setTimeout(() => { window.print(); setTimeout(done, 1500); }, 50);
+    pdfFile = null;
+    const hasComments = state.comments.some(c => c.book === state.book && c.chapter === state.chapter);
+    $('#pdfName').textContent = pdfLabel() + '.pdf';
+    $('#pdfCommentsRow').hidden = !hasComments;
+    $('#pdfMake').hidden = false; $('#pdfSave').hidden = true;
+    $('#pdfStatus').textContent = ''; $('#pdfStatus').className = 'editor-status';
+    $('#pdfModal').hidden = false; lockScroll('pdf');
+  });
+  const closePdf = () => { $('#pdfModal').hidden = true; unlockScroll('pdf'); };
+  $('#pdfClose').addEventListener('click', closePdf);
+  $('#pdfComments').addEventListener('change', () => { pdfFile = null; $('#pdfMake').hidden = false; $('#pdfSave').hidden = true; $('#pdfStatus').textContent = ''; });
+  $('#pdfMake').addEventListener('click', async () => {
+    const st = $('#pdfStatus'); st.className = 'editor-status'; st.textContent = 'Creando el PDF…';
+    $('#pdfMake').disabled = true;
+    try {
+      const JsPDF = await loadJsPDF();
+      const blob = buildPdf(JsPDF, !$('#pdfCommentsRow').hidden && $('#pdfComments').checked);
+      pdfFile = new File([blob], fileName(pdfLabel()) + '.pdf', { type: 'application/pdf' });
+      st.textContent = `PDF listo (${Math.max(1, Math.round(blob.size / 1024))} KB). Elige dónde guardarlo.`;
+      $('#pdfMake').hidden = true; $('#pdfSave').hidden = false;
+    } catch (e) { st.className = 'editor-status warn'; st.textContent = 'No se pudo crear el PDF: ' + e.message; }
+    $('#pdfMake').disabled = false;
+  });
+  $('#pdfSave').addEventListener('click', async () => {
+    if (!pdfFile) return;
+    const st = $('#pdfStatus');
+    try { st.textContent = await saveFile(pdfFile); }
+    catch (e) { if (e.name !== 'AbortError') { st.className = 'editor-status warn'; st.textContent = 'No se pudo guardar: ' + e.message; } }
   });
 
+  // Maqueta del PDF: A4, Helvetica, cabecera centrada, números de versículo en dorado, subtítulos y divisiones,
+  // comentarios en cursiva con la línea dorada, y pie con el nombre y el número de página.
+  function buildPdf(JsPDF, withComments) {
+    const pdf = new JsPDF({ unit: 'pt', format: 'a4' });
+    const W = pdf.internal.pageSize.getWidth(), H = pdf.internal.pageSize.getHeight();
+    const M = 58, TOP = 64, BOTTOM = 70, CW = W - 2 * M;
+    const GOLD = [176, 138, 46], DEEP = [138, 106, 28], INK = [43, 36, 23], SOFT = [110, 98, 80], LIGHT = [232, 211, 154];
+    const book = bookOf(state.book), doc = chapterDoc();
+    let y = TOP;
+    const color = c => pdf.setTextColor(...c);
+    const font = (style, size) => { pdf.setFont('helvetica', style); pdf.setFontSize(size); };
+    const ensure = h => { if (y + h > H - BOTTOM) { pdf.addPage(); y = TOP; } };
+    const plain = t => String(t).replace(/\/\[([^\]]+)\]/g, '$1');
+    // reparte el texto en líneas; la primera puede empezar más a la derecha (tras el número)
+    function wrap(text, first, width) {
+      const words = String(text).split(/\s+/).filter(Boolean), lines = []; let line = '', max = first;
+      for (const wd of words) {
+        const test = line ? line + ' ' + wd : wd;
+        if (pdf.getTextWidth(test) > max && line) { lines.push(line); line = wd; max = width; }
+        else line = test;
+      }
+      if (line) lines.push(line);
+      return lines;
+    }
+    // Cabecera
+    font('normal', 8.5); color(SOFT);
+    pdf.text((book.topic ? 'TEMA' : book.name.toUpperCase()).split('').join(' ').replace(/ {3}/g, '  '), W / 2, y, { align: 'center' });
+    y += 30; font('normal', 26); color(GOLD);
+    for (const l of wrap(book.topic ? book.name : `Capítulo ${state.chapter}`, CW, CW)) { pdf.text(l, W / 2, y, { align: 'center' }); y += 30; }
+    if (!book.topic && doc.name) { y -= 8; font('normal', 12); color(SOFT); for (const l of wrap(doc.name, CW, CW)) { pdf.text(l, W / 2, y, { align: 'center' }); y += 16; } }
+    // adorno: línea · cruz · línea
+    y += 6; pdf.setDrawColor(...LIGHT); pdf.setLineWidth(0.8);
+    pdf.line(W / 2 - 90, y, W / 2 - 14, y); pdf.line(W / 2 + 14, y, W / 2 + 90, y);
+    pdf.setDrawColor(...GOLD); pdf.setLineWidth(2); pdf.line(W / 2, y - 7, W / 2, y + 7); pdf.line(W / 2 - 5, y - 2, W / 2 + 5, y - 2);
+    y += 30;
+    const commentsOf = (v, tg) => withComments ? (state.byRef.get(key(state.book, state.chapter, v, tg)) || []) : [];
+    function comments(list) {
+      for (const c of list) {
+        font('italic', 10); const lines = wrap(plain(c.text), CW - 22, CW - 22);
+        for (let i = 0; i < lines.length; i++) {
+          ensure(14); color(SOFT); pdf.text(lines[i], M + 22, y);
+          pdf.setDrawColor(...GOLD); pdf.setLineWidth(1.5); pdf.line(M + 12, y - 10, M + 12, y + 4);
+          y += 14;
+        }
+        y += 4;
+      }
+    }
+    for (const x of withTargets(doc.blocks)) {
+      if (x.t === 'd') {
+        y += 10; font('bold', 10.5); color(DEEP);
+        const lines = wrap(x.text.toUpperCase(), CW - 40, CW - 40);
+        ensure(lines.length * 15 + 30);
+        for (const l of lines) { pdf.text(l, W / 2, y, { align: 'center', charSpace: 0.6 }); y += 15; }
+        y += 8; comments(commentsOf(x.v, x.tg));
+      } else if (x.t === 'h') {
+        y += 8; font('bold', 13); color(DEEP);
+        const lines = wrap(x.text, CW, CW);
+        ensure(lines.length * 17 + 30);
+        for (const l of lines) { pdf.text(l, M, y); y += 17; }
+        y += 2; comments(commentsOf(x.v, x.tg));
+      } else {
+        font('normal', 11.5);
+        const num = book.topic ? '' : String(x.n);
+        font('bold', 7.5); const nw = num ? pdf.getTextWidth(num) + 4 : 0;
+        font('normal', 11.5);
+        const lines = wrap(x.text, CW - nw, CW);
+        for (let i = 0; i < lines.length; i++) {
+          ensure(16.5);
+          if (i === 0 && num) { font('bold', 7.5); color(GOLD); pdf.text(num, M, y - 3.5); font('normal', 11.5); }
+          color(INK); pdf.text(lines[i], M + (i === 0 ? nw : 0), y);
+          y += 16.5;
+        }
+        y += 5; comments(commentsOf(x.v, ''));
+      }
+    }
+    // Pie de página
+    const pages = pdf.getNumberOfPages(), label = pdfLabel();
+    for (let i = 1; i <= pages; i++) {
+      pdf.setPage(i); font('normal', 8); color(SOFT);
+      pdf.setDrawColor(...LIGHT); pdf.setLineWidth(0.6); pdf.line(M, H - 44, W - M, H - 44);
+      pdf.text(label, M, H - 30);
+      pdf.text(`${i} / ${pages}`, W - M, H - 30, { align: 'right' });
+    }
+    return pdf.output('blob');
+  }
+
   // ---------- Copia de seguridad en Excel ----------
+  let backupFile = null;
   $('#backupBtn').addEventListener('click', () => {
     closeDrawer();
+    backupFile = null;
     $('#backupPinBox').hidden = !!store.get('pin', '');
-    $('#backupStatus').textContent = '';
+    $('#backupStatus').textContent = ''; $('#backupStatus').className = 'editor-status';
+    $('#backupDo').hidden = false; $('#backupSave').hidden = true;
     $('#backupModal').hidden = false; lockScroll('backup');
   });
   const closeBackup = () => { $('#backupModal').hidden = true; unlockScroll('backup'); };
@@ -1002,26 +1184,24 @@
       if (!r.ok) throw new Error('Error ' + r.status);
       const blob = await r.blob();
       const name = (r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'evangelio-copia.xlsx';
-      const file = new File([blob], name, { type: blob.type });
-      // En el móvil: menú de compartir («Guardar en Archivos»); si no, descarga normal
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: name }); st.textContent = 'Copia lista.'; }
-        catch (e) { if (e.name !== 'AbortError') throw e; st.textContent = ''; }
-      } else {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob); a.download = name;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-        st.textContent = 'Copia descargada: ' + name;
-      }
+      backupFile = new File([blob], name, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      st.textContent = 'Copia lista. Elige dónde guardarla.';
+      btn.hidden = true; $('#backupSave').hidden = false;
     } catch (e) { st.className = 'editor-status warn'; st.textContent = 'No se pudo hacer la copia: ' + e.message; }
     btn.disabled = false;
+  });
+  $('#backupSave').addEventListener('click', async () => {
+    if (!backupFile) return;
+    const st = $('#backupStatus');
+    try { st.textContent = await saveFile(backupFile); }
+    catch (e) { if (e.name !== 'AbortError') { st.className = 'editor-status warn'; st.textContent = 'No se pudo guardar: ' + e.message; } }
   });
 
   $('#chapterTitle').addEventListener('click', () => { openBooks.add(state.book); openDrawer('bibleNav'); });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (!$('#backupModal').hidden) closeBackup();
+      if (!$('#pdfModal').hidden) closePdf();
+      else if (!$('#backupModal').hidden) closeBackup();
       else if (!$('#claudeModal').hidden) closeClaude();
       else if (!$('#editorModal').hidden) closeEditor();
       else if (drawer.classList.contains('open')) closeDrawer();

@@ -388,13 +388,12 @@ body.editing main { padding-bottom: 70vh; }
 
 /* Ir al final / al principio */
 .scroll-btn {
-  position: fixed; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 25;
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 25;
   width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
   border: 1px solid var(--gold-light); background: rgba(255,255,255,.94); backdrop-filter: blur(6px);
   box-shadow: 0 4px 14px rgba(95, 70, 10, .18); color: var(--gold-deep);
 }
 .scroll-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
-.scroll-btn.up svg { transform: rotate(180deg); }
 .scroll-btn:active { background: var(--gold-pale); }
 body.editing .scroll-btn { display: none; }
 
@@ -482,3 +481,29 @@ body.editing .scroll-btn { display: none; }
   body.print-chapter .mentions, body.print-chapter .mention-menu { display: none !important; }
   body.print-chapter a.mention { background: none; border: 0; padding: 0; }
 }
+
+/* ---------- v3.1: pasar página, botón de bajar centrado y PDF ---------- */
+/* La hoja que gira sobre su lomo al cambiar de capítulo */
+.leaf-stage { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; perspective: 1800px; pointer-events: none; overflow: hidden; }
+.leaf {
+  position: absolute; inset: 0; background: var(--paper); overflow: hidden;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden; will-change: transform;
+  box-shadow: 0 0 40px rgba(70, 50, 0, .25);
+}
+.leaf-next { transform-origin: left center; }
+.leaf-prev { transform-origin: right center; }
+.leaf-shade { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+.leaf-next .leaf-shade { background: linear-gradient(to left, rgba(70, 50, 0, .45), rgba(70, 50, 0, .08) 45%, rgba(70, 50, 0, 0) 70%); }
+.leaf-prev .leaf-shade { background: linear-gradient(to right, rgba(70, 50, 0, .45), rgba(70, 50, 0, .08) 45%, rgba(70, 50, 0, 0) 70%); }
+body.flipping .scroll-btn { display: none; }
+
+/* Ventana de exportar PDF */
+.pdf-card {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 12px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--paper-warm);
+}
+.pdf-card svg { width: 34px; height: 34px; flex-shrink: 0; fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linejoin: round; }
+.pdf-name { font-size: 16px; font-weight: 600; color: var(--ink); word-break: break-word; }
+.pdf-sub { font-size: 13px; color: var(--ink-soft); }
+.check-row { display: flex; align-items: center; gap: 10px; font-size: 16px; color: var(--ink); padding: 6px 2px 10px; cursor: pointer; }
+.check-row input { width: 20px; height: 20px; accent-color: var(--gold); }
