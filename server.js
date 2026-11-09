@@ -188,8 +188,13 @@ const store = makeStore();
 // ---------- Validación ----------
 const BOOKS = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'books.json'), 'utf8')).books;
 const MAX_VERSE = 500;
+// ---------- Temas: cada tema es como un libro de un solo capítulo, con id 1000 + n ----------
+const TOPIC_BASE = 1000;
+let topics = [];   // [{ id, title, createdAt }], guardado en settings («topics»)
+const topicOf = book => book > TOPIC_BASE ? topics.find(t => TOPIC_BASE + t.id === book) : null;
+const saveTopics = () => store.setSetting('topics', topics);
 function validRef(book, chapter, verse) {
-  const b = BOOKS.find(x => x.id === book);
+  const b = BOOKS.find(x => x.id === book) || (topicOf(book) && { chapters: 1 });
   return !!b && Number.isInteger(chapter) && chapter >= 1 && chapter <= b.chapters
     && (verse === undefined || (Number.isInteger(verse) && verse >= 1 && verse <= MAX_VERSE));
 }
@@ -278,7 +283,7 @@ app.get('/api/backup.xlsx', requirePin, wrap(async (req, res) => {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Evangelio'; wb.created = new Date();
   const GOLD = 'FFB08A2E', PALE = 'FFFAF4E3';
-  const bookName = id => (BOOKS.find(b => b.id === id) || {}).name || `Libro ${id}`;
+  const bookName = id => (BOOKS.find(b => b.id === id) || {}).name || (topicOf(id) ? `Tema: ${topicOf(id).title}` : `Libro ${id}`);
   const fmt = d => d ? new Date(d) : null;
   function sheet(name, columns, rows) {
     const ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] });
@@ -361,6 +366,53 @@ app.get('/api/backup.xlsx', requirePin, wrap(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   await wb.xlsx.write(res);
   res.end();
+}));
+
+// ---------- Temas ----------
+const cleanTitle = t => String(t || '').replace(/[\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
+app.get('/api/topics', (req, res) => res.json(topics));
+app.post('/api/topics', wrap(async (req, res) => {
+  const title = cleanTitle(req.body.title);
+  if (!title) return res.status(400).json({ error: 'Escribe el nombre del tema' });
+  if (topics.some(t => t.title.toLowerCase() === title.toLowerCase())) return res.status(400).json({ error: 'Ya existe un tema con ese nombre' });
+  const t = { id: topics.reduce((m, x) => Math.max(m, x.id), 0) + 1, title, createdAt: new Date().toISOString() };
+  topics.push(t); await saveTopics();
+  res.status(201).json(t);
+}));
+// Renombrar: también se actualizan las menciones «/[Tema]» de los comentarios
+app.put('/api/topics/:id', wrap(async (req, res) => {
+  const t = topics.find(x => x.id === Number(req.params.id)); if (!t) return res.status(404).json({ error: 'No existe' });
+  const title = cleanTitle(req.body.title);
+  if (!title) return res.status(400).json({ error: 'Escribe el nombre del tema' });
+  if (topics.some(x => x !== t && x.title.toLowerCase() === title.toLowerCase())) return res.status(400).json({ error: 'Ya existe un tema con ese nombre' });
+  const old = t.title; t.title = title; await saveTopics();
+  if (old !== title) {
+    const re = new RegExp('/\\[' + old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\]', 'gi');
+    for (const c of await store.list()) if (re.test(c.text)) { re.lastIndex = 0; await store.update(c.id, { text: c.text.replace(re, `/[${title}]`), author: c.author || '' }); }
+  }
+  res.json(t);
+}));
+app.delete('/api/topics/:id', requirePin, wrap(async (req, res) => {
+  const t = topics.find(x => x.id === Number(req.params.id)); if (!t) return res.status(404).json({ error: 'No existe' });
+  const book = TOPIC_BASE + t.id;
+  await store.setText(book, 1, { name: '', blocks: [] });
+  await store.deleteComments((await store.list()).filter(c => c.book === book).map(c => c.id));
+  await store.deletePosts((await store.listPosts()).filter(p => p.book === book).map(p => p.id));
+  const bm = await store.getSetting('bookmark'); if (bm && bm.book === book) await store.deleteSetting('bookmark');
+  topics = topics.filter(x => x !== t); await saveTopics();
+  res.status(204).end();
+}));
+
+// ---------- Borrar mensajes de la discusión (solo el dueño, con PIN) ----------
+app.delete('/api/posts/:id', requirePin, wrap(async (req, res) => {
+  const p = (await store.listPosts()).find(x => x.id === req.params.id);
+  if (!p) return res.status(404).json({ error: 'No encontrado' });
+  await store.deletePosts([p.id]); res.status(204).end();
+}));
+app.delete('/api/posts', requirePin, wrap(async (req, res) => {
+  const b = Number(req.query.book), c = Number(req.query.chapter), v = Number(req.query.verse);
+  const ids = (await store.listPosts()).filter(x => x.book === b && x.chapter === c && x.verse === v).map(x => x.id);
+  await store.deletePosts(ids); res.json({ deleted: ids.length });
 }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, storage: store.kind.startsWith('archivo') ? 'file' : 'postgres' }));
@@ -464,5 +516,6 @@ app.use(express.static(path.join(__dirname, 'public'), { setHeaders: res => res.
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 store.init()
+  .then(async () => { topics = (await store.getSetting('topics')) || []; })
   .then(() => app.listen(PORT, () => console.log(`Evangelio escuchando en :${PORT} (almacenamiento: ${store.kind})`)))
   .catch(e => { console.error('No se pudo iniciar el almacenamiento', e); process.exit(1); });

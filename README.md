@@ -13,6 +13,11 @@ App para leer y comentar los libros de cabecera: **Evangelio según Lucas** (par
 - **Comentarios**: uno por versículo, subtítulo o división, ocultos; un punto dorado indica que existe y aparece al pulsar.
   El cuadro crece al escribir; guardar no lo cierra; al cerrar se vuelve al principio del versículo.
   Los comentarios y mensajes de textos eliminados se ocultan, y al guardar el capítulo se pueden borrar.
+- **Temas**: temas propios (p. ej. «Infierno») con párrafos y subtítulos, comentables como un capítulo
+  (internamente, libro 1000 + n con un solo capítulo). Al final de cada tema, «Menciones».
+- **Menciones**: en un comentario, `/` abre la lista de temas; se guarda como `/[Tema]` y se muestra como enlace.
+  Al renombrar un tema se actualizan sus menciones.
+- **Eliminar**: comentario (opción del versículo) y mensajes de la discusión, uno o todos (con PIN).
 - **Marcar aquí / Quitar marca**: cinta roja de misal; «Seguir leyendo», al principio del menú, lleva a ella.
 - **Discusión**: foro por versículo (nombre, fecha y mensaje).
 - **Menú lateral** (botón o deslizando a la derecha): Seguir leyendo · Libros (desplegables → capítulos) ·
@@ -37,6 +42,10 @@ Sin `DATABASE_URL`, los datos se guardan en `data/`. En Railway, con PostgreSQL 
 | PUT / DELETE | `/api/comments/:id` | Editar `{text}` / borrar |
 | GET / PUT / DELETE | `/api/bookmark` | Marca «Seguir leyendo» |
 | GET / POST | `/api/posts` | Discusión `{book, chapter, verse, name, text}` |
+| DELETE | `/api/posts/:id`, `/api/posts?book&chapter&verse` | Borrar mensaje / discusión (PIN) |
+| GET / POST | `/api/topics` | Temas `{title}` |
+| PUT / DELETE | `/api/topics/:id` | Renombrar (actualiza menciones) / borrar (PIN) |
+| GET | `/api/backup.xlsx` | Copia de seguridad en Excel (PIN) |
 
 Libros (`public/books.json`): Lucas = 42, Hechos = 44.
 

@@ -54,15 +54,25 @@
     </section>
 
     <section class="drawer-section">
+      <button class="section-toggle" aria-expanded="false" data-target="topicNav">
+        <span class="num">II.</span> Temas <span class="badge" id="topicTotal">0</span><span class="chev"></span>
+      </button>
+      <div id="topicNav" class="section-body" hidden>
+        <div id="topicList"></div>
+        <button class="new-topic" id="newTopicBtn">+ Nuevo tema</button>
+      </div>
+    </section>
+
+    <section class="drawer-section">
       <button class="section-toggle" aria-expanded="false" data-target="commentIndex">
-        <span class="num">II.</span> Índice de comentarios <span class="badge" id="commentTotal">0</span><span class="chev"></span>
+        <span class="num">III.</span> Índice de comentarios <span class="badge" id="commentTotal">0</span><span class="chev"></span>
       </button>
       <div id="commentIndex" class="section-body" hidden></div>
     </section>
 
     <section class="drawer-section">
       <button class="section-toggle" aria-expanded="false" data-target="forumIndex">
-        <span class="num">III.</span> Discusión <span class="badge" id="forumTotal">0</span><span class="chev"></span>
+        <span class="num">IV.</span> Discusión <span class="badge" id="forumTotal">0</span><span class="chev"></span>
       </button>
       <div id="forumIndex" class="section-body" hidden></div>
     </section>
@@ -124,9 +134,14 @@
         </button>
       </div>
       <div class="modal-body">
-        <label class="editor-label" for="editorName">Nombre del capítulo <span>(opcional)</span></label>
+        <label class="editor-label" for="editorName" id="editorNameLabel">Nombre del capítulo <span>(opcional)</span></label>
         <input id="editorName" class="editor-name" type="text" maxlength="150" placeholder="Por ejemplo: Infancia de Juan y de Jesús">
-        <p class="editor-help">
+        <p class="editor-help" id="editorHelpTopic" hidden>
+          Cada línea es un párrafo. El número del principio identifica el párrafo y conserva sus comentarios:
+          no lo cambies. Para añadir un párrafo nuevo, escríbelo sin número.<br>
+          <code># Título</code> → subtítulo.
+        </p>
+        <p class="editor-help" id="editorHelpBook">
           Cada versículo empieza por su número: <code>46 Y María dijo…</code>. Para separar dos versículos unidos,
           pon el número al principio de una línea nueva (se admiten saltos en la numeración).<br>
           <code># Prólogo</code> → subtítulo tuyo, se puede comentar.<br>
@@ -136,6 +151,8 @@
         <p class="editor-status" id="editorStatus"></p>
       </div>
       <div class="modal-foot">
+        <button class="btn ghost danger" id="editorDelete" hidden>Eliminar tema</button>
+        <span class="grow"></span>
         <button class="btn ghost" id="editorCancel">Cancelar</button>
         <button class="btn primary" id="editorSave">Guardar</button>
       </div>

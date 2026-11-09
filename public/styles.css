@@ -424,3 +424,61 @@ body.editing .scroll-btn { display: none; }
     font-size: 10.5pt; color: #5a5040; font-style: italic;
   }
 }
+
+/* ---------- v3.0: temas, menciones y eliminar ---------- */
+.act.act-danger { color: var(--danger); }
+.modal-foot .grow { flex: 1; }
+
+/* Discusión: eliminar mensajes */
+.post-meta { align-items: center; }
+.post-del { margin-left: auto; border: 0; background: none; padding: 2px; color: #b9ae96; display: grid; place-items: center; }
+.post-del:hover { color: var(--danger); }
+.post-del svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.forum-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.forum-del { margin-left: auto; border: 0; background: none; color: var(--danger); font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 500; text-decoration: underline; }
+
+/* Menciones de temas */
+.mention {
+  color: var(--gold-deep); font-weight: 600; text-decoration: none; white-space: nowrap;
+  background: var(--gold-pale); border: 1px solid var(--gold-light); border-radius: 6px; padding: 0 5px; font-style: normal;
+}
+.mention::before { content: "/"; opacity: .5; margin-right: 1px; }
+.mention-menu {
+  margin-top: 6px; border: 1px solid var(--gold-light); border-radius: 10px; background: #fff; box-shadow: var(--shadow);
+  max-height: 220px; overflow-y: auto; padding: 4px;
+}
+.mention-menu button {
+  display: block; width: 100%; text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: 8px;
+  font-size: 16px; color: var(--ink);
+}
+.mention-menu button::before { content: "/"; color: var(--gold); margin-right: 6px; }
+.mention-menu button:hover, .mention-menu button:active { background: var(--gold-pale); }
+.mention-menu .empty { margin: 0; padding: 8px 10px; }
+
+/* Temas en el menú */
+.topic-row {
+  width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; border: 0; background: transparent;
+  padding: 9px 10px; border-radius: 8px; font-size: 17px; color: var(--ink);
+}
+.topic-row:hover { background: var(--gold-pale); }
+.topic-row.current { color: var(--gold-deep); font-weight: 600; }
+.topic-row .count { margin-left: auto; color: var(--ink-soft); font-size: 13px; font-weight: 400; }
+.new-topic { border: 0; background: none; color: var(--gold-deep); font-size: 15px; font-weight: 500; padding: 8px 10px; }
+
+/* Página de un tema */
+.verse.para { padding-left: 12px; }
+.mentions { margin-top: 34px; padding-top: 14px; border-top: 1px solid var(--line); }
+.mentions h3 { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-deep); margin: 0 0 10px; }
+.mentions h3 .count { color: var(--ink-soft); font-weight: 400; margin-left: 4px; }
+.mention-item {
+  display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--paper-warm);
+  border-radius: 10px; padding: 9px 12px; margin-bottom: 8px;
+}
+.mention-item:hover { border-color: var(--gold-light); }
+.mention-ref { display: block; font-size: 13px; font-weight: 600; color: var(--gold-deep); margin-bottom: 2px; }
+.mention-text { display: block; font-size: 15px; color: var(--ink); white-space: pre-wrap; }
+
+@media print {
+  body.print-chapter .mentions, body.print-chapter .mention-menu { display: none !important; }
+  body.print-chapter a.mention { background: none; border: 0; padding: 0; }
+}

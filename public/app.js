@@ -12,12 +12,14 @@
     text: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
     share: '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>',
     ribbon: '<svg viewBox="0 0 24 24" class="ribbon-ico"><path d="M7 1h10v22l-5-5.5L7 23z"/></svg>',
+    trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
     forum: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   };
   const ROMAN = /^\s*(?:[IVX]{1,5})\.\s+\S/;   // «I. …», «II. …»: divisiones del propio texto
 
   const state = {
     books: [],              // [{ id, part, name, short, chapters }]
+    topics: [],             // [{ id, title }]
     texts: new Map(),       // "libro:cap" -> { name, blocks: [{t:'v',n,text}|{t:'h',text}|{t:'d',text}] }
     summary: {},            // "libro:cap" -> { name, verses: [n…], targets: ["5:t0"…] }
     comments: [], byRef: new Map(),
@@ -29,8 +31,25 @@
   };
   // Clave de un comentario: versículo (tg '') o subtítulo/división antes del versículo v (tg 't0', 't1'…)
   const key = (b, c, v, tg = '') => `${b}:${c}:${v}:${tg}`;
-  const bookOf = id => state.books.find(b => b.id === id);
-  const refLabel = (b, c, v) => `${bookOf(b).short} ${c}:${v}`;
+  // Los temas funcionan como un libro de un solo capítulo con id 1000 + n
+  const TOPIC_BASE = 1000;
+  const isTopic = id => id > TOPIC_BASE;
+  const topicBook = t => ({ id: TOPIC_BASE + t.id, topicId: t.id, topic: true, part: '', name: t.title, short: t.title, chapters: 1 });
+  const bookOf = id => state.books.find(b => b.id === id) ||
+    (isTopic(id) ? (t => t && topicBook(t))(state.topics.find(t => TOPIC_BASE + t.id === id)) : undefined);
+  const refLabel = (b, c, v) => isTopic(b) ? `${bookOf(b)?.short || 'Tema'}` : `${bookOf(b).short} ${c}:${v}`;
+  const mnorm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const byTitle = (a, b) => a.title.localeCompare(b.title, 'es');
+  // Menciones «/[Tema]» dentro de un comentario → enlace al tema
+  function mentionHtml(text, plain) {
+    return esc(text).replace(/\/\[([^\]]+)\]/g, (m, title) => {
+      const t = state.topics.find(x => esc(x.title).toLowerCase() === title.toLowerCase());
+      if (!t) return m;
+      return plain ? `<span class="mention">${esc(t.title)}</span>`
+        : `<a class="mention" href="#/${TOPIC_BASE + t.id}/1" data-topic="${t.id}">${esc(t.title)}</a>`;
+    });
+  }
+  const mentions = (text, t) => text.toLowerCase().includes(`/[${t.title.toLowerCase()}]`);
 
   // Subtítulos y divisiones: se identifican por el versículo siguiente y su orden
   function withTargets(blocks) {
@@ -95,8 +114,9 @@
   const indexComments = () => { state.byRef = group(state.comments); };
   const indexPosts = () => { state.postsByRef = group(state.posts); };
   async function loadAll() {
-    const [c, p, bm, sm] = await Promise.allSettled([
-      api('GET', '/api/comments'), api('GET', '/api/posts'), api('GET', '/api/bookmark'), api('GET', '/api/text-summary')]);
+    const [c, p, bm, sm, tp] = await Promise.allSettled([
+      api('GET', '/api/comments'), api('GET', '/api/posts'), api('GET', '/api/bookmark'), api('GET', '/api/text-summary'), api('GET', '/api/topics')]);
+    state.topics = tp.status === 'fulfilled' ? tp.value : state.topics;
     state.comments = c.status === 'fulfilled' ? c.value : [];
     state.posts = p.status === 'fulfilled' ? p.value : [];
     state.bookmark = bm.status === 'fulfilled' ? bm.value : null;
@@ -202,6 +222,7 @@
   }
   // Capítulo anterior (-1) o siguiente (+1); null si no hay más
   function neighbour(dir) {
+    if (isTopic(state.book)) return null;   // los temas no tienen capítulo anterior ni siguiente
     const bi0 = state.books.findIndex(b => b.id === state.book);
     let bi = bi0, c = state.chapter + dir;
     if (c < 1) { if (bi === 0) return null; bi--; c = state.books[bi].chapters; }
@@ -236,10 +257,14 @@
     const { book: b, chapter: c } = state;
     const book = bookOf(b);
     const setTitle = name => {
-      $('#chapterTitle').innerHTML = `<small>${esc(book.name)}</small>Capítulo ${c}${name ? `<span class="ch-name">${esc(name)}</span>` : ''}`;
+      $('#chapterTitle').innerHTML = book.topic
+        ? `<small>Tema</small>${esc(book.name)}`
+        : `<small>${esc(book.name)}</small>Capítulo ${c}${name ? `<span class="ch-name">${esc(name)}</span>` : ''}`;
     };
     setTitle(state.summary[`${b}:${c}`]?.name);
-    document.title = `${book.short} ${c} · Evangelio`;
+    document.title = book.topic ? `${book.name} · Evangelio` : `${book.short} ${c} · Evangelio`;
+    $('#editChapterBtn').textContent = book.topic ? 'Editar tema' : 'Editar capítulo';
+    $('#pdfChapterBtn').textContent = book.topic ? 'Exportar tema en PDF' : 'Exportar capítulo en PDF';
     const wrap = $('#verses');
     wrap.innerHTML = '<p class="loading">Cargando…</p>';
     state.active = null;
@@ -250,15 +275,15 @@
     $('#editChapterBtn').hidden = !doc.blocks.length;
     if (!doc.blocks.length) {
       wrap.innerHTML = `<div class="empty-chapter">
-        <p>Este capítulo aún no tiene texto.</p>
-        <button class="btn primary" data-act="add-text">Añadir el texto del capítulo</button>
-      </div>`;
+        <p>${book.topic ? 'Este tema aún no tiene contenido.' : 'Este capítulo aún no tiene texto.'}</p>
+        <button class="btn primary" data-act="add-text">${book.topic ? 'Añadir contenido' : 'Añadir el texto del capítulo'}</button>
+      </div>${book.topic ? mentionsHtml(book) : ''}`;
       return;
     }
     wrap.innerHTML = withTargets(doc.blocks).map(x => {
       if (x.t === 'v') return `
-      <section class="verse block" id="v${x.n}" data-v="${x.n}" data-tg="" tabindex="0" aria-label="Versículo ${x.n}">
-        ${ribbonHtml(b, c, x.n)}<span class="vnum">${x.n}</span><span class="vtext">${esc(x.text)}</span>${extrasHtml(b, c, x.n, '')}
+      <section class="verse block${book.topic ? ' para' : ''}" id="v${x.n}" data-v="${x.n}" data-tg="" tabindex="0" aria-label="${book.topic ? 'Párrafo' : 'Versículo ' + x.n}">
+        ${ribbonHtml(b, c, x.n)}${book.topic ? '' : `<span class="vnum">${x.n}</span>`}<span class="vtext">${esc(x.text)}</span>${extrasHtml(b, c, x.n, '')}
       </section>`;
       const cls = x.t === 'd' ? 'division' : 'section-title';
       return `
@@ -266,13 +291,34 @@
         <span class="btext">${esc(x.text)}</span>${extrasHtml(b, c, x.v, x.tg)}
       </div>`;
     }).join('');
+    if (book.topic) wrap.insertAdjacentHTML('beforeend', mentionsHtml(book));
   }
   // Punto en la esquina + comentario (oculto hasta pulsar)
   function extrasHtml(b, c, v, tg) {
     const list = state.byRef.get(key(b, c, v, tg)) || [];
     if (!list.length) return '';
     return `<span class="dot" title="Tiene comentario"></span>
-      <div class="vcomment">${list.map(cm => `<p>${esc(cm.text)}</p>`).join('')}</div>`;
+      <div class="vcomment">${list.map(cm => `<p>${mentionHtml(cm.text)}</p>`).join('')}</div>`;
+  }
+  // Apartado «Menciones» de un tema: comentarios que lo mencionan con «/[Tema]»
+  function mentionsHtml(book) {
+    const t = state.topics.find(x => x.id === book.topicId); if (!t) return '';
+    const list = state.comments.filter(c => mentions(c.text, t) && alive(c.book, c.chapter, c.verse, c.target || '') && bookOf(c.book))
+      .sort((a, b) => a.book - b.book || a.chapter - b.chapter || a.verse - b.verse);
+    const where = c => isTopic(c.book) ? `Tema · ${bookOf(c.book).name}` : c.target ? `${bookOf(c.book).short} ${c.chapter} · subtítulo` : `${bookOf(c.book).short} ${c.chapter}:${c.verse}`;
+    return `<section class="mentions">
+      <h3>Menciones <span class="count">${list.length}</span></h3>
+      ${list.length ? list.map(c => `
+        <button class="mention-item" data-goto="${c.book}:${c.chapter}:${c.verse}:${c.target || ''}">
+          <span class="mention-ref">${esc(where(c))}</span>
+          <span class="mention-text">${mentionHtml(c.text, true)}</span>
+        </button>`).join('') : '<p class="empty">Aún no hay comentarios que mencionen este tema. Al escribir un comentario, escribe «/» y elige el tema.</p>'}
+    </section>`;
+  }
+  function gotoRef(k, mode) {
+    const [b, c, v, tg] = k.split(':'); const B = +b, C = +c, V = +v;
+    state.pendingOpen = { id: tg ? `t${V}-${tg.slice(1)}` : `v${V}`, mode };
+    return go(B, C, tg ? null : V);
   }
   const infoOf = el => ({ v: +el.dataset.v, tg: el.dataset.tg || '' });
   function refreshExtras(el) {
@@ -352,6 +398,7 @@
     box.innerHTML = `
       <div class="actions">
         ${commentBtn}
+        ${has ? `<button class="act act-danger" data-act="delete">${ICON.trash}Eliminar comentario</button>` : ''}
         ${tg ? '' : `
         <button class="act" data-act="mark">${ICON.ribbon}${isMarked(v) ? 'Quitar marca' : 'Marcar aquí'}</button>
         <button class="act" data-act="edit-text">${ICON.text}Editar texto</button>
@@ -375,7 +422,8 @@
     const existing = commentOf(v, tg);
     box.querySelector('.slot').innerHTML = `
       <div class="form">
-        <textarea class="ctext grow" placeholder="Escribe aquí tu comentario…" aria-label="Comentario">${existing ? esc(existing.text) : ''}</textarea>
+        <textarea class="ctext grow" placeholder="Escribe aquí tu comentario… (escribe / para mencionar un tema)" aria-label="Comentario">${existing ? esc(existing.text) : ''}</textarea>
+        <div class="mention-menu" hidden></div>
         <div class="form-row">${commentRow(existing)}</div>
       </div>`;
     editBelowVerse(box.querySelector('textarea'));
@@ -395,7 +443,10 @@
         state.comments.push(await api('POST', '/api/comments', { book: state.book, chapter: state.chapter, verse: v, target: tg, text }));
       }
       indexComments(); refreshExtras(el); renderCommentIndex();
-      box.querySelector('[data-act="comment"]').lastChild.textContent = 'Editar comentario';
+      const cbtn = box.querySelector('[data-act="comment"]');
+      cbtn.lastChild.textContent = 'Editar comentario';
+      if (!box.querySelector('.actions [data-act="delete"]'))
+        cbtn.insertAdjacentHTML('afterend', `<button class="act act-danger" data-act="delete">${ICON.trash}Eliminar comentario</button>`);
       box.querySelector('.slot').innerHTML = '';
       stopEditing();
       document.activeElement?.blur();
@@ -450,7 +501,8 @@
     if (!list.length) return '<p class="empty">Todavía no hay mensajes. Empieza la discusión.</p>';
     return list.map(p => `
       <div class="post">
-        <div class="post-meta"><b>${esc(p.name)}</b><span>${fmtDate(p.createdAt)}</span></div>
+        <div class="post-meta"><b>${esc(p.name)}</b><span>${fmtDate(p.createdAt)}</span>
+          <button class="post-del" data-act="del-post" data-id="${p.id}" aria-label="Eliminar mensaje" title="Eliminar mensaje">${ICON.trash}</button></div>
         <div class="post-text">${esc(p.text)}</div>
       </div>`).join('');
   }
@@ -458,7 +510,8 @@
     const list = state.postsByRef.get(key(state.book, state.chapter, v, '')) || [];
     box.querySelector('.slot').innerHTML = `
       <div class="forum">
-        <div class="forum-title">Discusión · ${esc(refLabel(state.book, state.chapter, v))}</div>
+        <div class="forum-title">Discusión · ${esc(refLabel(state.book, state.chapter, v))}
+          ${list.length ? '<button class="forum-del" data-act="del-forum">Eliminar discusión</button>' : ''}</div>
         <div class="posts">${postsHtml(list)}</div>
         <div class="form">
           <input class="pname" type="text" maxlength="40" placeholder="Tu nombre" aria-label="Tu nombre" value="${esc(store.get('name', ''))}">
@@ -470,6 +523,29 @@
         </div>
       </div>`;
     const posts = box.querySelector('.posts'); posts.scrollTop = posts.scrollHeight;
+  }
+  // Borrar un mensaje o toda la discusión de un versículo: solo el dueño, con el PIN
+  async function ownerFetch(method, url) {
+    for (let i = 0; i < 2; i++) {
+      let pin = store.get('pin', '');
+      if (!pin) { pin = (prompt('Escribe el PIN para eliminar') || '').trim(); if (!pin) return false; store.set('pin', pin); }
+      const r = await fetch(url, { method, headers: { 'X-Owner-Token': pin } });
+      if (r.ok) return true;
+      if (r.status === 401) { store.set('pin', ''); toast('PIN incorrecto'); continue; }
+      throw new Error('Error ' + r.status);
+    }
+    return false;
+  }
+  async function deletePosts(v, id) {
+    if (!confirm(id ? '¿Eliminar este mensaje?' : '¿Eliminar toda la discusión de este versículo?')) return;
+    try {
+      const ok = await ownerFetch('DELETE', id ? `/api/posts/${id}` : `/api/posts?book=${state.book}&chapter=${state.chapter}&verse=${v}`);
+      if (!ok) return;
+      state.posts = state.posts.filter(p => id ? p.id !== id : !(p.book === state.book && p.chapter === state.chapter && p.verse === v));
+      indexPosts(); renderForumIndex();
+      openActions(state.active, 'forum');
+      toast(id ? 'Mensaje eliminado' : 'Discusión eliminada');
+    } catch (e) { toast('No se pudo eliminar: ' + e.message); }
   }
   async function publish(box) {
     const el = activeEl(); const { v } = infoOf(el);
@@ -506,6 +582,8 @@
 
   $('#verses').addEventListener('click', e => {
     if (e.target.closest('[data-act="add-text"]')) { openEditor(); return; }
+    const mi = e.target.closest('.mention-item');
+    if (mi) { gotoRef(mi.dataset.goto); return; }
     const el = e.target.closest('.block'); if (!el) return;
     const box = e.target.closest('.vactions');
     if (!box) { state.active === el.id ? closeActions() : openActions(el.id); return; }
@@ -522,6 +600,8 @@
     else if (act === 'save-text') saveText(box);
     else if (act === 'delete') deleteComment();
     else if (act === 'post') publish(box);
+    else if (act === 'del-post') deletePosts(v, btn.dataset.id);
+    else if (act === 'del-forum') deletePosts(v, null);
   });
   $('#verses').addEventListener('keydown', e => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('block')) {
@@ -599,9 +679,34 @@
     return blocks;
   }
   const serialize = blocks => blocks.map(b => b.t === 'h' ? `# ${b.text}` : b.t === 'd' ? b.text : `${b.n} ${b.text}`).join('\n');
+  // Temas: cada línea es un párrafo. El número del principio (si lo tiene) lo identifica y conserva sus comentarios;
+  // los párrafos nuevos, sin número, reciben uno libre.
+  function parseTopic(raw) {
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const used = new Set(), out = [];
+    for (const l of lines) { const m = l.match(/^(\d{1,3})\s+\S/); if (m && !l.startsWith('#')) used.add(+m[1]); }
+    let next = 1; const free = () => { while (used.has(next)) next++; used.add(next); return next; };
+    const seen = new Set();
+    for (const l of lines) {
+      const h = l.match(/^#+\s*(.*)$/);
+      if (h) { if (h[1].trim()) out.push({ t: 'h', text: h[1].replace(/\s+/g, ' ').trim() }); continue; }
+      const m = l.match(/^(\d{1,3})\s+(.*)$/);
+      if (m && !seen.has(+m[1])) { seen.add(+m[1]); out.push({ t: 'v', n: +m[1], text: m[2].replace(/\s+/g, ' ').trim() }); }
+      else out.push({ t: 'v', n: free(), text: l.replace(/\s+/g, ' ') });
+    }
+    return out;
+  }
+  const editingTopic = () => isTopic(state.book);
   function editorStatus() {
-    const blocks = parseChapter($('#editorText').value);
     const st = $('#editorStatus');
+    if (editingTopic()) {
+      const blocks = parseTopic($('#editorText').value);
+      const paras = blocks.filter(b => b.t === 'v').length, heads = blocks.length - paras;
+      st.className = 'editor-status';
+      st.textContent = blocks.length ? `${paras} párrafo${paras === 1 ? '' : 's'}${heads ? ` y ${heads} subtítulo${heads > 1 ? 's' : ''}` : ''}.` : '';
+      return blocks;
+    }
+    const blocks = parseChapter($('#editorText').value);
     if (!$('#editorText').value.trim()) { st.innerHTML = ''; st.className = 'editor-status'; return blocks; }
     const verses = blocks.filter(b => b.t === 'v');
     const heads = blocks.filter(b => b.t === 'h').length, divs = blocks.filter(b => b.t === 'd').length;
@@ -625,8 +730,12 @@
   function openEditor() {
     closeActions();
     const doc = chapterDoc();
-    $('#editorTitle').textContent = `${bookOf(state.book).short} ${state.chapter} · texto del capítulo`;
-    $('#editorName').value = doc.name || '';
+    const topic = editingTopic(), book = bookOf(state.book);
+    $('#editorTitle').textContent = topic ? 'Contenido del tema' : `${book.short} ${state.chapter} · texto del capítulo`;
+    $('#editorNameLabel').innerHTML = topic ? 'Nombre del tema' : 'Nombre del capítulo <span>(opcional)</span>';
+    $('#editorName').value = topic ? book.name : (doc.name || '');
+    $('#editorHelpTopic').hidden = !topic; $('#editorHelpBook').hidden = topic;
+    $('#editorDelete').hidden = !topic;
     $('#editorText').value = serialize(doc.blocks);
     editorStatus();
     $('#editorModal').hidden = false; lockScroll('editor');
@@ -635,6 +744,15 @@
   async function saveEditor() {
     const blocks = editorStatus();
     if (blocks.some(b => b.t === 'v' && !b.text)) return toast('Hay versículos sin texto. Revisa la numeración.');
+    // Tema: si cambia el nombre, se renombra (y se actualizan sus menciones)
+    if (editingTopic()) {
+      const book = bookOf(state.book), title = $('#editorName').value.trim();
+      if (!title) return toast('Escribe el nombre del tema');
+      if (title !== book.name) {
+        try { await api('PUT', `/api/topics/${book.topicId}`, { title }); await loadAll(); }
+        catch (e) { return toast('No se pudo renombrar: ' + e.message); }
+      }
+    }
     const prev = chapterDoc();
     if (!blocks.length && prev.blocks.length && !confirm('El capítulo quedará vacío. ¿Seguro?')) return;
     // ¿Quedan comentarios o mensajes de textos que desaparecen?
@@ -650,7 +768,7 @@
     }
     const btn = $('#editorSave'); btn.disabled = true;
     try {
-      const res = await api('PUT', `/api/text/${state.book}/${state.chapter}`, { name: $('#editorName').value.trim(), blocks, purge });
+      const res = await api('PUT', `/api/text/${state.book}/${state.chapter}`, { name: editingTopic() ? '' : $('#editorName').value.trim(), blocks, purge });
       state.texts.set(`${state.book}:${state.chapter}`, { name: res.name, blocks: res.blocks });
       if (purge) await loadAll();
       else state.summary[`${state.book}:${state.chapter}`] = {
@@ -659,7 +777,7 @@
       };
       closeEditor();
       const y = window.scrollY; await renderChapter(); refreshRibbons(); window.scrollTo(0, y);
-      renderCommentIndex(); renderForumIndex();
+      renderCommentIndex(); renderForumIndex(); renderTopicList();
       toast(res.purged ? `Texto guardado · ${res.purged} elemento${res.purged > 1 ? 's' : ''} eliminado${res.purged > 1 ? 's' : ''}` : 'Texto del capítulo guardado');
     } catch (e) { toast('No se pudo guardar: ' + e.message); }
     btn.disabled = false;
@@ -669,12 +787,63 @@
   $('#editorCancel').addEventListener('click', closeEditor);
   $('#editorClose').addEventListener('click', closeEditor);
   $('#editChapterBtn').addEventListener('click', openEditor);
+  $('#editorDelete').addEventListener('click', async () => {
+    const book = bookOf(state.book);
+    if (!confirm(`¿Eliminar el tema «${book.name}» con todo su contenido, comentarios y discusión?\n\nLas menciones en otros comentarios quedarán como texto.`)) return;
+    try {
+      if (!(await ownerFetch('DELETE', `/api/topics/${book.topicId}`))) return;
+      closeEditor(); await loadAll();
+      renderTopicList(); renderCommentIndex(); renderForumIndex(); refreshRibbons();
+      go(state.books[0].id, 1); toast('Tema eliminado');
+    } catch (e) { toast('No se pudo eliminar: ' + e.message); }
+  });
+
+  // ---------- Menú de menciones al escribir «/» en un comentario ----------
+  function mentionQuery(ta) {
+    const before = ta.value.slice(0, ta.selectionStart);
+    const m = before.match(/(^|\s)\/([^\s\/\[\]]*)$/);
+    return m ? { q: m[2], start: before.length - m[2].length - 1 } : null;
+  }
+  function mentionCheck(ta) {
+    const menu = ta.parentElement.querySelector('.mention-menu'); if (!menu) return;
+    const mq = mentionQuery(ta);
+    if (!mq) { menu.hidden = true; return; }
+    const q = mnorm(mq.q);
+    const list = state.topics.filter(t => mnorm(t.title).includes(q)).sort(byTitle).slice(0, 8);
+    menu.innerHTML = list.length
+      ? list.map(t => `<button type="button" data-mention="${t.id}">${esc(t.title)}</button>`).join('')
+      : `<p class="empty">${state.topics.length ? 'Ningún tema coincide.' : 'Aún no hay temas. Créalos en el menú, en «Temas».'}</p>`;
+    menu.hidden = false;
+  }
+  document.addEventListener('input', e => { if (e.target.matches('textarea.ctext')) mentionCheck(e.target); });
+  document.addEventListener('keyup', e => { if (e.target.matches('textarea.ctext') && /Arrow|Home|End/.test(e.key)) mentionCheck(e.target); });
+  // pointerdown + preventDefault: elegir sin que el cuadro pierda el foco (ni se cierre el teclado)
+  document.addEventListener('pointerdown', e => { if (e.target.closest('[data-mention]')) e.preventDefault(); });
+  document.addEventListener('click', e => {
+    const opt = e.target.closest('[data-mention]'); if (!opt) return;
+    e.stopPropagation();
+    const ta = opt.closest('.form').querySelector('textarea.ctext');
+    const t = state.topics.find(x => x.id === +opt.dataset.mention), mq = mentionQuery(ta);
+    if (!t || !mq) return;
+    const ins = `/[${t.title}] `;
+    ta.value = ta.value.slice(0, mq.start) + ins + ta.value.slice(ta.selectionStart);
+    const pos = mq.start + ins.length;
+    ta.focus(); ta.setSelectionRange(pos, pos); autosize(ta);
+    opt.closest('.mention-menu').hidden = true;
+  }, true);
+  // Enlaces a temas dentro de comentarios (en el texto o en los índices)
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a.mention'); if (!a) return;
+    e.preventDefault(); e.stopPropagation();
+    closeDrawer(); closeActions();
+    go(TOPIC_BASE + +a.dataset.topic, 1);
+  }, true);
 
   // ---------- Menú lateral ----------
   const drawer = $('#drawer'), scrim = $('#scrim');
-  const SECTIONS = ['bibleNav', 'commentIndex', 'forumIndex'];
+  const SECTIONS = ['bibleNav', 'topicNav', 'commentIndex', 'forumIndex'];
   function openDrawer(section) {
-    renderBookList();
+    renderBookList(); renderTopicList();
     if (section) for (const id of SECTIONS) setSection(id, id === section);
     drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false');
     scrim.hidden = false; $('#menuBtn').setAttribute('aria-expanded', 'true');
@@ -880,6 +1049,28 @@
         }).join('')}</div>` : ''}`;
     }).join('');
   }
+  function renderTopicList() {
+    $('#topicTotal').textContent = state.topics.length;
+    $('#topicList').innerHTML = state.topics.length ? [...state.topics].sort(byTitle).map(t => {
+      const n = state.comments.filter(c => mentions(c.text, t)).length;
+      return `<button class="topic-row${TOPIC_BASE + t.id === state.book ? ' current' : ''}" data-topic-open="${t.id}">
+        <span>${esc(t.title)}</span>${n ? `<span class="count" title="Menciones">${n}</span>` : ''}</button>`;
+    }).join('') : '<div class="empty">Aún no hay temas. Crea el primero.</div>';
+  }
+  $('#topicList').addEventListener('click', e => {
+    const b = e.target.closest('[data-topic-open]'); if (!b) return;
+    closeDrawer(); go(TOPIC_BASE + +b.dataset.topicOpen, 1);
+  });
+  $('#newTopicBtn').addEventListener('click', async () => {
+    const title = (prompt('Nombre del nuevo tema (por ejemplo: Infierno)') || '').trim();
+    if (!title) return;
+    try {
+      const t = await api('POST', '/api/topics', { title });
+      state.topics.push(t); renderTopicList();
+      closeDrawer(); await go(TOPIC_BASE + t.id, 1);
+      openEditor();
+    } catch (e) { toast('No se pudo crear: ' + e.message); }
+  });
   $('#bookList').addEventListener('click', e => {
     const ch = e.target.closest('[data-c]');
     if (ch) { closeDrawer(); go(+ch.dataset.b, +ch.dataset.c); return; }
@@ -958,14 +1149,16 @@
   const renderCommentIndex = makeIndex({
     el: $('#commentIndex'), countEl: $('#commentTotal'), byRef: () => state.byRef,
     emptyText: 'Aún no hay comentarios. Pulsa cualquier versículo o subtítulo para añadir uno.',
-    refLabelText: (r, list, blk) => r.tg ? `Subtítulo · cap. ${r.c}${blk ? `<span class="idx-sub">${esc(blk.text)}</span>` : ''}` : `Versículo ${r.c}:${r.v}`,
-    body: list => list.map(cm => `<div class="idx-comment">${esc(cm.text)}</div>`).join(''),
+    refLabelText: (r, list, blk) => isTopic(r.b)
+      ? `${r.tg ? 'Subtítulo' : 'Párrafo'}${blk ? `<span class="idx-sub">${esc(blk.text.slice(0, 70))}${blk.text.length > 70 ? '…' : ''}</span>` : ''}`
+      : r.tg ? `Subtítulo · cap. ${r.c}${blk ? `<span class="idx-sub">${esc(blk.text)}</span>` : ''}` : `Versículo ${r.c}:${r.v}`,
+    body: list => list.map(cm => `<div class="idx-comment">${mentionHtml(cm.text)}</div>`).join(''),
     gotoMode: null, gotoText: 'Ir al texto',
   });
   const renderForumIndex = makeIndex({
     el: $('#forumIndex'), countEl: $('#forumTotal'), byRef: () => state.postsByRef,
     emptyText: 'Aún no hay discusiones. Pulsa un versículo y elige «Discusión» para empezar una.',
-    refLabelText: (r, list) => `Versículo ${r.c}:${r.v}<span class="count">${list.length} mensaje${list.length > 1 ? 's' : ''}</span>`,
+    refLabelText: (r, list) => `${isTopic(r.b) ? 'Párrafo' : `Versículo ${r.c}:${r.v}`}<span class="count">${list.length} mensaje${list.length > 1 ? 's' : ''}</span>`,
     body: list => {
       const last = list[list.length - 1];
       return `<p class="idx-last">Último mensaje de <b>${esc(last.name)}</b> · ${fmtDate(last.createdAt)}</p>`;
@@ -1091,7 +1284,7 @@
     }
     await loadAll();
     await route();
-    renderCommentIndex(); renderForumIndex(); refreshRibbons();
+    renderCommentIndex(); renderForumIndex(); renderTopicList(); refreshRibbons();
     initNews();
   })();
 })();
