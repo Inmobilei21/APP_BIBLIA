@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "3.3",
+      "date": "2026-11-09",
+      "changes": [
+        "Exportar en PDF y la copia en Excel: al pulsar «Guardar» salen directamente las opciones para guardar, sin pasos intermedios.",
+        "Cuando el archivo se ha guardado, la ventana se cierra sola."
+      ]
+    },
+    {
       "version": "3.2",
       "date": "2026-11-09",
       "changes": [

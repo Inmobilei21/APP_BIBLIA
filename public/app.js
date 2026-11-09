@@ -1128,9 +1128,23 @@
     const book = bookOf(state.book), doc = chapterDoc();
     return book.topic ? book.name : `${book.short} ${state.chapter}${doc.name ? ' - ' + doc.name : ''}`;
   }
+  // Guarda el archivo y, si se ha guardado, cierra la ventana. Si se cancela o el móvil pide otro toque,
+  // la ventana se queda con «Guardar en…» para intentarlo de nuevo.
+  async function saveAndClose(file, { close, st, retry, done }) {
+    try {
+      await saveFile(file);
+      close(); toast(done);
+    } catch (e) {
+      retry.hidden = false;
+      if (e.name === 'AbortError') { st.className = 'editor-status'; st.textContent = 'No se ha guardado. Pulsa «Guardar en…» para intentarlo de nuevo.'; }
+      else if (e.name === 'NotAllowedError') { st.className = 'editor-status'; st.textContent = 'Listo. Pulsa «Guardar en…» para elegir dónde guardarlo.'; }
+      else { st.className = 'editor-status warn'; st.textContent = 'No se pudo guardar: ' + e.message; }
+    }
+  }
   $('#pdfChapterBtn').addEventListener('click', () => {
     closeActions();
     pdfFile = null;
+    loadJsPDF().catch(() => {});   // se prepara ya el generador, para guardar al primer toque
     const hasComments = state.comments.some(c => c.book === state.book && c.chapter === state.chapter);
     $('#pdfName').textContent = pdfLabel() + '.pdf';
     $('#pdfCommentsRow').hidden = !hasComments;
@@ -1141,24 +1155,21 @@
   const closePdf = () => { $('#pdfModal').hidden = true; unlockScroll('pdf'); };
   $('#pdfClose').addEventListener('click', closePdf);
   $('#pdfComments').addEventListener('change', () => { pdfFile = null; $('#pdfMake').hidden = false; $('#pdfSave').hidden = true; $('#pdfStatus').textContent = ''; });
+  const pdfOpts = () => ({ close: closePdf, st: $('#pdfStatus'), retry: $('#pdfSave'), done: 'PDF guardado' });
+  // «Guardar PDF»: crea el PDF y abre en el mismo toque las opciones para guardarlo
   $('#pdfMake').addEventListener('click', async () => {
-    const st = $('#pdfStatus'); st.className = 'editor-status'; st.textContent = 'Creando el PDF…';
-    $('#pdfMake').disabled = true;
+    const st = $('#pdfStatus'); st.className = 'editor-status';
     try {
-      const JsPDF = await loadJsPDF();
+      // con el generador ya cargado todo ocurre en el mismo toque (el iPhone lo exige para abrir «Compartir»)
+      const JsPDF = window.jspdf?.jsPDF || (st.textContent = 'Preparando…', await loadJsPDF());
       const blob = buildPdf(JsPDF, !$('#pdfCommentsRow').hidden && $('#pdfComments').checked);
       pdfFile = new File([blob], fileName(pdfLabel()) + '.pdf', { type: 'application/pdf' });
-      st.textContent = `PDF listo (${Math.max(1, Math.round(blob.size / 1024))} KB). Elige dónde guardarlo.`;
-      $('#pdfMake').hidden = true; $('#pdfSave').hidden = false;
+      st.textContent = '';
+      $('#pdfMake').hidden = true;
+      await saveAndClose(pdfFile, pdfOpts());
     } catch (e) { st.className = 'editor-status warn'; st.textContent = 'No se pudo crear el PDF: ' + e.message; }
-    $('#pdfMake').disabled = false;
   });
-  $('#pdfSave').addEventListener('click', async () => {
-    if (!pdfFile) return;
-    const st = $('#pdfStatus');
-    try { st.textContent = await saveFile(pdfFile); }
-    catch (e) { if (e.name !== 'AbortError') { st.className = 'editor-status warn'; st.textContent = 'No se pudo guardar: ' + e.message; } }
-  });
+  $('#pdfSave').addEventListener('click', () => { if (pdfFile) saveAndClose(pdfFile, pdfOpts()); });
 
   // Maqueta del PDF: A4, Helvetica, cabecera centrada, números de versículo en dorado, subtítulos y divisiones,
   // comentarios en cursiva con la línea dorada, y pie con el nombre y el número de página.
@@ -1247,39 +1258,51 @@
   }
 
   // ---------- Copia de seguridad en Excel ----------
-  let backupFile = null;
-  $('#backupBtn').addEventListener('click', () => {
-    closeDrawer();
+  // Se prepara al abrir la ventana; al pulsar el botón salen directamente las opciones para guardarla.
+  let backupFile = null, backupLoading = null;
+  function prepareBackup() {
     backupFile = null;
-    $('#backupPinBox').hidden = !!store.get('pin', '');
-    $('#backupStatus').textContent = ''; $('#backupStatus').className = 'editor-status';
-    $('#backupDo').hidden = false; $('#backupSave').hidden = true;
-    $('#backupModal').hidden = false; lockScroll('backup');
-  });
-  const closeBackup = () => { $('#backupModal').hidden = true; unlockScroll('backup'); };
-  $('#backupClose').addEventListener('click', closeBackup);
-  $('#backupDo').addEventListener('click', async () => {
-    if (!$('#backupPinBox').hidden) store.set('pin', $('#backupPin').value.trim());
-    const btn = $('#backupDo'), st = $('#backupStatus');
-    btn.disabled = true; st.className = 'editor-status'; st.textContent = 'Preparando la copia…';
-    try {
+    const st = $('#backupStatus');
+    st.className = 'editor-status'; st.textContent = 'Preparando la copia…';
+    backupLoading = (async () => {
       const r = await fetch('/api/backup.xlsx', { cache: 'no-store', headers: { 'X-Owner-Token': store.get('pin', '') } });
       if (r.status === 401) { $('#backupPinBox').hidden = false; throw new Error('PIN incorrecto'); }
       if (!r.ok) throw new Error('Error ' + r.status);
       const blob = await r.blob();
       const name = (r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'evangelio-copia.xlsx';
       backupFile = new File([blob], name, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      st.textContent = 'Copia lista. Elige dónde guardarla.';
-      btn.hidden = true; $('#backupSave').hidden = false;
-    } catch (e) { st.className = 'editor-status warn'; st.textContent = 'No se pudo hacer la copia: ' + e.message; }
+      st.textContent = 'Copia lista.';
+      return backupFile;
+    })();
+    backupLoading.catch(e => { st.className = 'editor-status warn'; st.textContent = 'No se pudo preparar la copia: ' + e.message; });
+    return backupLoading;
+  }
+  $('#backupBtn').addEventListener('click', () => {
+    closeDrawer();
+    const hasPin = !!store.get('pin', '');
+    $('#backupPinBox').hidden = hasPin;
+    $('#backupStatus').textContent = ''; $('#backupStatus').className = 'editor-status';
+    $('#backupDo').hidden = false; $('#backupSave').hidden = true;
+    $('#backupModal').hidden = false; lockScroll('backup');
+    backupFile = null; backupLoading = null;
+    if (hasPin) prepareBackup();
+  });
+  const closeBackup = () => { $('#backupModal').hidden = true; unlockScroll('backup'); };
+  $('#backupClose').addEventListener('click', closeBackup);
+  const backupOpts = () => ({ close: closeBackup, st: $('#backupStatus'), retry: $('#backupSave'), done: 'Copia guardada' });
+  $('#backupDo').addEventListener('click', async () => {
+    if (!$('#backupPinBox').hidden) { store.set('pin', $('#backupPin').value.trim()); backupFile = null; backupLoading = null; }
+    // ya preparada: se guarda en el mismo toque
+    if (backupFile) { $('#backupDo').hidden = true; return saveAndClose(backupFile, backupOpts()); }
+    const btn = $('#backupDo'); btn.disabled = true;
+    try {
+      const file = await (backupLoading || prepareBackup());
+      btn.hidden = true;
+      await saveAndClose(file, backupOpts());
+    } catch { /* el mensaje ya está en pantalla */ }
     btn.disabled = false;
   });
-  $('#backupSave').addEventListener('click', async () => {
-    if (!backupFile) return;
-    const st = $('#backupStatus');
-    try { st.textContent = await saveFile(backupFile); }
-    catch (e) { if (e.name !== 'AbortError') { st.className = 'editor-status warn'; st.textContent = 'No se pudo guardar: ' + e.message; } }
-  });
+  $('#backupSave').addEventListener('click', () => { if (backupFile) saveAndClose(backupFile, backupOpts()); });
 
   $('#chapterTitle').addEventListener('click', () => { openBooks.add(state.book); openDrawer('bibleNav'); });
   document.addEventListener('keydown', e => {
