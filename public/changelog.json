@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "3.9",
+      "date": "2026-11-10",
+      "changes": [
+        "Desplazamiento más ligero y fiable, sobre todo en iPhone más antiguos: la página empieza a moverse al primer gesto."
+      ]
+    },
+    {
       "version": "3.8",
       "date": "2026-11-10",
       "changes": [

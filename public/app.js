@@ -1068,11 +1068,11 @@
       if (!dir) {
         if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
         dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
-        if (dir !== 'h') return;
+        if (dir !== 'h') { detach(); return; }   // desplazamiento normal: se deja de escuchar el gesto
         if (e.cancelable) e.preventDefault();
         if (mode === 'drawer') drawer.style.transition = 'none';
         else if (neighbour(x < 0 ? 1 : -1)) { busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
-        else reader.style.transition = 'none';
+        else { reader.style.transition = 'none'; reader.style.willChange = 'transform'; }
       }
       dx = x; dy = y;
       if (mode === 'drawer') {
@@ -1095,7 +1095,7 @@
       }
       if (!flip) {
         reader.style.transition = 'transform .25s cubic-bezier(.2,.8,.3,1)'; reader.style.transform = '';
-        setTimeout(() => { reader.style.transition = ''; }, 260);
+        setTimeout(() => { reader.style.transition = ''; reader.style.willChange = ''; }, 260);
         return;
       }
       // si la hoja aún se estaba preparando, se espera un instante
@@ -1124,19 +1124,26 @@
   // Siempre apunta hacia el final; desaparece al llegar al final del capítulo.
   (() => {
     const btn = $('#scrollBtn');
-    const update = () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      btn.hidden = max < 200 || window.scrollY >= max - 40 ||
+    // ligero mientras se desplaza: el alto de la página se mide solo cuando cambia, y como mucho una vez por fotograma
+    let pageH = 0, queued = false;
+    const measure = () => { pageH = document.documentElement.scrollHeight; };
+    const apply = () => {
+      queued = false;
+      const max = pageH - window.innerHeight;
+      const hide = max < 200 || window.scrollY >= max - 40 ||
         document.body.classList.contains('scroll-locked') || document.body.classList.contains('flipping');
+      if (btn.hidden !== hide) btn.hidden = hide;
     };
+    const update = () => { if (!queued) { queued = true; requestAnimationFrame(apply); } };
+    const remeasure = () => { measure(); update(); };
     btn.addEventListener('click', () => {
       window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
     });
     window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    new MutationObserver(update).observe($('#verses'), { childList: true, subtree: true });
+    window.addEventListener('resize', remeasure);
+    new MutationObserver(remeasure).observe($('#verses'), { childList: true, subtree: true });
     new MutationObserver(update).observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    update();
+    remeasure();
   })();
 
   // ---------- Guardar un archivo eligiendo dónde ----------
