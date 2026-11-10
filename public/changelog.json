@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "4.4",
+      "date": "2026-11-10",
+      "changes": [
+        "Un versículo solo se abre con un toque de verdad: si mueves el dedo para desplazarte, ya no se selecciona.",
+        "Desplazar con el pulgar desde el centro ya no se confunde con pasar página."
+      ]
+    },
+    {
       "version": "4.3",
       "date": "2026-11-10",
       "changes": [

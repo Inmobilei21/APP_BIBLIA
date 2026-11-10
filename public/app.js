@@ -589,13 +589,40 @@
     }
   }
 
+  // ---- Toque de verdad: abrir un versículo exige un toque corto con el dedo quieto ----
+  // Si el dedo se ha movido (aunque sea un poco), el toque ha durado mucho o la página se ha desplazado,
+  // se entiende como desplazamiento y no se abre nada.
+  let touch = null;
+  document.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    touch = { x: t.clientX, y: t.clientY, t: performance.now(), sy: window.scrollY, moved: e.touches.length > 1 };
+  }, { passive: true, capture: true });
+  document.addEventListener('touchmove', e => {
+    if (!touch) return;
+    const t = e.touches[0];
+    if (Math.hypot(t.clientX - touch.x, t.clientY - touch.y) > 8) touch.moved = true;
+  }, { passive: true, capture: true });
+  // además se compara dónde se levantó el dedo con dónde se apoyó
+  document.addEventListener('touchend', e => {
+    if (!touch) return;
+    const t = e.changedTouches[0];
+    if (t && Math.hypot(t.clientX - touch.x, t.clientY - touch.y) > 8) touch.moved = true;
+  }, { passive: true, capture: true });
+  const realTap = () => {
+    if (!touch || performance.now() - touch.t > 1500) return true;   // ratón o teclado
+    return !touch.moved && performance.now() - touch.t < 600 && Math.abs(window.scrollY - touch.sy) < 4;
+  };
+
   $('#verses').addEventListener('click', e => {
     if (e.target.closest('[data-act="add-text"]')) { openEditor(); return; }
     const mi = e.target.closest('.mention-item');
     if (mi) { gotoRef(mi.dataset.goto); return; }
     const el = e.target.closest('.block'); if (!el) return;
     const box = e.target.closest('.vactions');
-    if (!box) { state.active === el.id ? closeActions() : openActions(el.id); return; }
+    if (!box) {
+      if (!realTap()) return;   // era un desplazamiento, no un toque
+      state.active === el.id ? closeActions() : openActions(el.id); return;
+    }
     const btn = e.target.closest('[data-act]'); if (!btn) return;
     const { v } = infoOf(el);
     const act = btn.dataset.act;
@@ -1053,23 +1080,21 @@
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
       target = e.target;
-      // no pasivo: así se puede impedir que el iPhone desplace la página mientras se pasa la hoja
-      target.addEventListener('touchmove', move, { passive: false });
+      // pasivo: la app nunca bloquea el desplazamiento del iPhone (el encabezado está fijo, así que no se mueve)
+      target.addEventListener('touchmove', move, { passive: true });
       target.addEventListener('touchend', end); target.addEventListener('touchcancel', end);
     }, { passive: true });
     function move(e) {
       if (dir === 'none') return;
       const tx = e.touches[0].clientX, x = tx - sx, y = e.touches[0].clientY - sy;
-      // Solo cuando ya está claro que el gesto es horizontal (pasar página) se impide desplazar la página.
-      // Antes de decidirlo nunca: si no, el iPhone cancelaría el desplazamiento normal hacia arriba o abajo.
-      if (e.cancelable && dir === 'h') e.preventDefault();
       const now = performance.now();
       if (now > lastT) { vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000); lastX = tx; lastT = now; }
       if (!dir) {
-        if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
-        dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
+        if (Math.hypot(x, y) < 12) return;
+        // solo un gesto claramente horizontal (menos de unos 25° de inclinación) cuenta como pasar página;
+        // el desplazamiento con el pulgar en arco desde el centro no se confunde
+        dir = Math.abs(x) > Math.abs(y) * 2.1 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
         if (dir !== 'h') return;
-        if (e.cancelable) e.preventDefault();
         if (mode === 'drawer') drawer.style.transition = 'none';
         else if (neighbour(x < 0 ? 1 : -1)) { busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
         else reader.style.transition = 'none';
