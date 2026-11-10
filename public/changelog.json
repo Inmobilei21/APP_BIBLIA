@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "4.2",
+      "date": "2026-11-10",
+      "changes": [
+        "Se deshace el cambio de la versión 4.1 y la app ya no interfiere nunca con el desplazamiento de la página, como antes."
+      ]
+    },
+    {
       "version": "4.0",
       "date": "2026-11-10",
       "changes": [

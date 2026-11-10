@@ -1053,23 +1053,19 @@
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
       target = e.target;
-      // no pasivo: así se puede impedir que el iPhone desplace la página mientras se pasa la hoja
-      target.addEventListener('touchmove', move, { passive: false });
+      // pasivo: la app nunca bloquea el desplazamiento del iPhone (el encabezado está fijo, así que no se mueve)
+      target.addEventListener('touchmove', move, { passive: true });
       target.addEventListener('touchend', end); target.addEventListener('touchcancel', end);
     }, { passive: true });
     function move(e) {
       if (dir === 'none') return;
       const tx = e.touches[0].clientX, x = tx - sx, y = e.touches[0].clientY - sy;
-      // Solo cuando ya está claro que el gesto es horizontal (pasar página) se impide desplazar la página.
-      // Antes de decidirlo nunca: si no, el iPhone cancelaría el desplazamiento normal hacia arriba o abajo.
-      if (e.cancelable && dir === 'h') e.preventDefault();
       const now = performance.now();
       if (now > lastT) { vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000); lastX = tx; lastT = now; }
       if (!dir) {
         if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
         dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
         if (dir !== 'h') { detach(); return; }   // desplazamiento normal: se deja de escuchar el gesto
-        if (e.cancelable) e.preventDefault();
         if (mode === 'drawer') drawer.style.transition = 'none';
         else if (neighbour(x < 0 ? 1 : -1)) { busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
         else { reader.style.transition = 'none'; reader.style.willChange = 'transform'; }
