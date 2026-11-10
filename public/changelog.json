@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "3.8",
+      "date": "2026-11-10",
+      "changes": [
+        "Arreglado el desplazamiento: ya no se queda parado ni hay que intentarlo varias veces para subir o bajar por el texto.",
+        "El encabezado queda fijo arriba, también al pasar página."
+      ]
+    },
+    {
       "version": "3.7",
       "date": "2026-11-10",
       "changes": [

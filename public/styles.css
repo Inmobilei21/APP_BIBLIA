@@ -526,8 +526,9 @@ body.flipping .scroll-btn { display: none; }
 .curl-back-shade { height: 90px; background: linear-gradient(to bottom, rgba(40, 28, 0, .22), rgba(255, 255, 255, .35) 35%, rgba(40, 28, 0, .06) 70%, rgba(40, 28, 0, 0)); }
 
 /* ---------- v3.5: el encabezado no se mueve al pasar página ---------- */
-/* sin rebote al tirar de la página arriba o abajo del todo */
-html, body { overscroll-behavior-y: none; }
+/* encabezado anclado arriba: no se mueve aunque la página rebote o se pase la hoja */
+.topbar { position: fixed; left: 0; right: 0; top: 0; }
+body { padding-top: calc(59px + env(safe-area-inset-top)); }
 /* mientras se pasa la hoja, la página no se desplaza */
 body.flipping { touch-action: none; }
 

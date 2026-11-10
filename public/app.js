@@ -1042,6 +1042,11 @@
     };
     document.addEventListener('touchstart', e => {
       detach();
+      // seguridad: si un paso de página anterior quedó a medias, se limpia para no bloquear el desplazamiento
+      if (!flip && !busy) {
+        document.body.classList.remove('flipping');
+        document.querySelectorAll('.curl-stage').forEach(x => x.remove());
+      }
       if (busy || e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
       sx = lastX = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = lastT = performance.now();
       dir = null; dx = 0; dy = 0; vx = 0;
@@ -1055,15 +1060,16 @@
     function move(e) {
       if (dir === 'none') return;
       const tx = e.touches[0].clientX, x = tx - sx, y = e.touches[0].clientY - sy;
-      // gesto horizontal (o que lo parece desde el principio): la página no se desplaza ni rebota,
-      // así el encabezado no se mueve mientras se pasa la hoja
-      if (e.cancelable && (dir === 'h' || (!dir && Math.abs(x) > Math.abs(y)))) e.preventDefault();
+      // Solo cuando ya está claro que el gesto es horizontal (pasar página) se impide desplazar la página.
+      // Antes de decidirlo nunca: si no, el iPhone cancelaría el desplazamiento normal hacia arriba o abajo.
+      if (e.cancelable && dir === 'h') e.preventDefault();
       const now = performance.now();
       if (now > lastT) { vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000); lastX = tx; lastT = now; }
       if (!dir) {
         if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
         dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
         if (dir !== 'h') return;
+        if (e.cancelable) e.preventDefault();
         if (mode === 'drawer') drawer.style.transition = 'none';
         else if (neighbour(x < 0 ? 1 : -1)) { busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
         else reader.style.transition = 'none';
@@ -1099,15 +1105,18 @@
       const f = flip;
       const towards = f.d > 0 ? -vx : vx;   // velocidad en el sentido de pasar la hoja
       const commit = f.p > 0.3 || (towards > 0.6 && f.p > 0.04);
-      if (commit) {
-        await animateTo(1);
-        await go(f.n.b, f.n.c);   // el capítulo real queda igual que la hoja que se ve
-        window.scrollTo(0, 0);
-      } else {
-        await animateTo(0);
+      try {
+        if (commit) {
+          await animateTo(1);
+          await go(f.n.b, f.n.c);   // el capítulo real queda igual que la hoja que se ve
+          window.scrollTo(0, 0);
+        } else {
+          await animateTo(0);
+        }
+      } finally {
+        f.stage.remove(); flip = null; busy = false;
+        document.body.classList.remove('flipping');
       }
-      f.stage.remove(); flip = null; busy = false;
-      document.body.classList.remove('flipping');
     }
   })();
 
@@ -1597,6 +1606,12 @@
   });
 
   window.addEventListener('hashchange', route);
+
+  // ---------- Encabezado fijo arriba ----------
+  // El contenido empieza justo debajo del encabezado (su alto cambia con la muesca del iPhone)
+  const fitHeader = () => { document.body.style.paddingTop = $('.topbar').offsetHeight + 'px'; };
+  fitHeader();
+  window.addEventListener('resize', fitHeader);
 
   // ---------- Inicio ----------
   (async () => {
