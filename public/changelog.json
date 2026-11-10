@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "4.3",
+      "date": "2026-11-10",
+      "changes": [
+        "Cuando hay muchas novedades, la ventana se ajusta a la pantalla: la ✕ y «Entendido» se ven siempre y la lista se desplaza por dentro."
+      ]
+    },
+    {
       "version": "3.8",
       "date": "2026-11-10",
       "changes": [

@@ -532,3 +532,22 @@ body { padding-top: calc(59px + env(safe-area-inset-top)); }
 /* mientras se pasa la hoja, la página no se desplaza */
 body.flipping { touch-action: none; }
 
+
+/* ---------- v4.3: ventanas que caben siempre en la pantalla ---------- */
+/* El alto se ajusta a lo que de verdad se ve en el iPhone (sin las barras de Safari ni la muesca);
+   la cabecera con la ✕ y los botones de abajo quedan fijos y solo el contenido se desplaza. */
+.modal-scrim {
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+}
+.modal {
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+.modal-wide {
+  height: calc(100vh - 32px);
+  height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+.modal-head, .modal-foot { flex-shrink: 0; }
+.modal-head { border-bottom: 1px solid transparent; }
+.modal-foot { border-top: 1px solid var(--line); padding-top: 12px; }
+.modal-body { flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; }
