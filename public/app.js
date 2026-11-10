@@ -589,40 +589,13 @@
     }
   }
 
-  // ---- Toque de verdad: abrir un versículo exige un toque corto con el dedo quieto ----
-  // Si el dedo se ha movido (aunque sea un poco), el toque ha durado mucho o la página se ha desplazado,
-  // se entiende como desplazamiento y no se abre nada.
-  let touch = null;
-  document.addEventListener('touchstart', e => {
-    const t = e.touches[0];
-    touch = { x: t.clientX, y: t.clientY, t: performance.now(), sy: window.scrollY, moved: e.touches.length > 1 };
-  }, { passive: true, capture: true });
-  document.addEventListener('touchmove', e => {
-    if (!touch) return;
-    const t = e.touches[0];
-    if (Math.hypot(t.clientX - touch.x, t.clientY - touch.y) > 8) touch.moved = true;
-  }, { passive: true, capture: true });
-  // además se compara dónde se levantó el dedo con dónde se apoyó
-  document.addEventListener('touchend', e => {
-    if (!touch) return;
-    const t = e.changedTouches[0];
-    if (t && Math.hypot(t.clientX - touch.x, t.clientY - touch.y) > 8) touch.moved = true;
-  }, { passive: true, capture: true });
-  const realTap = () => {
-    if (!touch || performance.now() - touch.t > 1500) return true;   // ratón o teclado
-    return !touch.moved && performance.now() - touch.t < 600 && Math.abs(window.scrollY - touch.sy) < 4;
-  };
-
   $('#verses').addEventListener('click', e => {
     if (e.target.closest('[data-act="add-text"]')) { openEditor(); return; }
     const mi = e.target.closest('.mention-item');
     if (mi) { gotoRef(mi.dataset.goto); return; }
     const el = e.target.closest('.block'); if (!el) return;
     const box = e.target.closest('.vactions');
-    if (!box) {
-      if (!realTap()) return;   // era un desplazamiento, no un toque
-      state.active === el.id ? closeActions() : openActions(el.id); return;
-    }
+    if (!box) { state.active === el.id ? closeActions() : openActions(el.id); return; }
     const btn = e.target.closest('[data-act]'); if (!btn) return;
     const { v } = infoOf(el);
     const act = btn.dataset.act;
@@ -1069,31 +1042,27 @@
     };
     document.addEventListener('touchstart', e => {
       detach();
-      // seguridad: si un paso de página anterior quedó a medias, se limpia para no bloquear el desplazamiento
-      if (!flip && !busy) {
-        document.body.classList.remove('flipping');
-        document.querySelectorAll('.curl-stage').forEach(x => x.remove());
-      }
       if (busy || e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
       sx = lastX = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = lastT = performance.now();
       dir = null; dx = 0; dy = 0; vx = 0;
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
       target = e.target;
-      // pasivo: la app nunca bloquea el desplazamiento del iPhone (el encabezado está fijo, así que no se mueve)
-      target.addEventListener('touchmove', move, { passive: true });
+      // no pasivo: así se puede impedir que el iPhone desplace la página mientras se pasa la hoja
+      target.addEventListener('touchmove', move, { passive: false });
       target.addEventListener('touchend', end); target.addEventListener('touchcancel', end);
     }, { passive: true });
     function move(e) {
       if (dir === 'none') return;
       const tx = e.touches[0].clientX, x = tx - sx, y = e.touches[0].clientY - sy;
+      // gesto horizontal (o que lo parece desde el principio): la página no se desplaza ni rebota,
+      // así el encabezado no se mueve mientras se pasa la hoja
+      if (e.cancelable && (dir === 'h' || (!dir && Math.abs(x) > Math.abs(y)))) e.preventDefault();
       const now = performance.now();
       if (now > lastT) { vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000); lastX = tx; lastT = now; }
       if (!dir) {
-        if (Math.hypot(x, y) < 12) return;
-        // solo un gesto claramente horizontal (menos de unos 25° de inclinación) cuenta como pasar página;
-        // el desplazamiento con el pulgar en arco desde el centro no se confunde
-        dir = Math.abs(x) > Math.abs(y) * 2.1 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
+        if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
+        dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
         if (dir !== 'h') return;
         if (mode === 'drawer') drawer.style.transition = 'none';
         else if (neighbour(x < 0 ? 1 : -1)) { busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
@@ -1130,18 +1099,15 @@
       const f = flip;
       const towards = f.d > 0 ? -vx : vx;   // velocidad en el sentido de pasar la hoja
       const commit = f.p > 0.3 || (towards > 0.6 && f.p > 0.04);
-      try {
-        if (commit) {
-          await animateTo(1);
-          await go(f.n.b, f.n.c);   // el capítulo real queda igual que la hoja que se ve
-          window.scrollTo(0, 0);
-        } else {
-          await animateTo(0);
-        }
-      } finally {
-        f.stage.remove(); flip = null; busy = false;
-        document.body.classList.remove('flipping');
+      if (commit) {
+        await animateTo(1);
+        await go(f.n.b, f.n.c);   // el capítulo real queda igual que la hoja que se ve
+        window.scrollTo(0, 0);
+      } else {
+        await animateTo(0);
       }
+      f.stage.remove(); flip = null; busy = false;
+      document.body.classList.remove('flipping');
     }
   })();
 
@@ -1631,12 +1597,6 @@
   });
 
   window.addEventListener('hashchange', route);
-
-  // ---------- Encabezado fijo arriba ----------
-  // El contenido empieza justo debajo del encabezado (su alto cambia con la muesca del iPhone)
-  const fitHeader = () => { document.body.style.paddingTop = $('.topbar').offsetHeight + 'px'; };
-  fitHeader();
-  window.addEventListener('resize', fitHeader);
 
   // ---------- Inicio ----------
   (async () => {

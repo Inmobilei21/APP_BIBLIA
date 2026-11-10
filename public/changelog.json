@@ -1,36 +1,6 @@
 {
   "versions": [
     {
-      "version": "4.4",
-      "date": "2026-11-10",
-      "changes": [
-        "Un versículo solo se abre con un toque de verdad: si mueves el dedo para desplazarte, ya no se selecciona.",
-        "Desplazar con el pulgar desde el centro ya no se confunde con pasar página."
-      ]
-    },
-    {
-      "version": "4.3",
-      "date": "2026-11-10",
-      "changes": [
-        "Cuando hay muchas novedades, la ventana se ajusta a la pantalla: la ✕ y «Entendido» se ven siempre y la lista se desplaza por dentro."
-      ]
-    },
-    {
-      "version": "3.8",
-      "date": "2026-11-10",
-      "changes": [
-        "Arreglado el desplazamiento: ya no se queda parado ni hay que intentarlo varias veces para subir o bajar por el texto.",
-        "El encabezado queda fijo arriba, también al pasar página."
-      ]
-    },
-    {
-      "version": "3.7",
-      "date": "2026-11-10",
-      "changes": [
-        "Perdona, no volverá a ocurrir 🙏"
-      ]
-    },
-    {
       "version": "3.5",
       "date": "2026-11-10",
       "changes": [
