@@ -1,0 +1,652 @@
+{
+ "consejos": [
+  {
+   "texto": "Trata hoy a los demás como te gustaría que te trataran a ti. Es la regla más sencilla y la más exigente.",
+   "cita": "Lc 6, 31",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 31
+   }
+  },
+  {
+   "texto": "Ama también a quien no te quiere y reza por quien te hace daño. Así rompes la cadena del rencor.",
+   "cita": "Lc 6, 27-28",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 27
+   }
+  },
+  {
+   "texto": "Antes de juzgar a alguien, recuerda que también tú necesitas que te perdonen.",
+   "cita": "Lc 6, 37",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 37
+   }
+  },
+  {
+   "texto": "Mira primero la viga en tu propio ojo; después podrás ayudar a tu hermano con su mota.",
+   "cita": "Lc 6, 41-42",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 41
+   }
+  },
+  {
+   "texto": "Da sin llevar la cuenta. La medida con la que des será la medida con la que recibas.",
+   "cita": "Lc 6, 38",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 38
+   }
+  },
+  {
+   "texto": "Sé misericordioso como tu Padre es misericordioso: mira a cada persona con ojos de compasión.",
+   "cita": "Lc 6, 36",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 36
+   }
+  },
+  {
+   "texto": "No te agobies por el mañana. Mira los lirios del campo: Dios cuida de ti más de lo que imaginas.",
+   "cita": "Lc 12, 22-28",
+   "ir": {
+    "b": 42,
+    "c": 12,
+    "v": 22
+   }
+  },
+  {
+   "texto": "Donde está tu tesoro, allí está tu corazón. Revisa hoy qué es lo que de verdad atesoras.",
+   "cita": "Lc 12, 34",
+   "ir": {
+    "b": 42,
+    "c": 12,
+    "v": 34
+   }
+  },
+  {
+   "texto": "Tu vida no depende de lo que tienes. Guárdate de la codicia y disfruta de lo esencial.",
+   "cita": "Lc 12, 15",
+   "ir": {
+    "b": 42,
+    "c": 12,
+    "v": 15
+   }
+  },
+  {
+   "texto": "Busca primero el Reino de Dios; todo lo demás encontrará su sitio.",
+   "cita": "Lc 12, 31",
+   "ir": {
+    "b": 42,
+    "c": 12,
+    "v": 31
+   }
+  },
+  {
+   "texto": "Pide, busca y llama. Dios no se cansa de escuchar a quien se acerca a él con confianza.",
+   "cita": "Lc 11, 9-10",
+   "ir": {
+    "b": 42,
+    "c": 11,
+    "v": 9
+   }
+  },
+  {
+   "texto": "Sé hoy buen samaritano: detente ante quien sufre, aunque no sea de los tuyos.",
+   "cita": "Lc 10, 30-37",
+   "ir": {
+    "b": 42,
+    "c": 10,
+    "v": 33
+   }
+  },
+  {
+   "texto": "Entre tantas prisas, elige como María la mejor parte: un rato tranquilo para escuchar.",
+   "cita": "Lc 10, 41-42",
+   "ir": {
+    "b": 42,
+    "c": 10,
+    "v": 42
+   }
+  },
+  {
+   "texto": "Si alguien vuelve a ti arrepentido, perdónale, aunque sea otra vez. El perdón no tiene cupo.",
+   "cita": "Lc 17, 3-4",
+   "ir": {
+    "b": 42,
+    "c": 17,
+    "v": 4
+   }
+  },
+  {
+   "texto": "De diez leprosos curados, solo uno volvió a dar gracias. Sé hoy ese uno: agradece.",
+   "cita": "Lc 17, 15-18",
+   "ir": {
+    "b": 42,
+    "c": 17,
+    "v": 15
+   }
+  },
+  {
+   "texto": "Nadie está demasiado lejos: el pastor deja las noventa y nueve para buscar a la oveja perdida.",
+   "cita": "Lc 15, 4-7",
+   "ir": {
+    "b": 42,
+    "c": 15,
+    "v": 4
+   }
+  },
+  {
+   "texto": "Si te has alejado, vuelve. El Padre te espera, te ve de lejos y corre a abrazarte.",
+   "cita": "Lc 15, 20",
+   "ir": {
+    "b": 42,
+    "c": 15,
+    "v": 20
+   }
+  },
+  {
+   "texto": "No te pongas del lado del hermano mayor: alégrate cuando alguien vuelve a casa.",
+   "cita": "Lc 15, 28-32",
+   "ir": {
+    "b": 42,
+    "c": 15,
+    "v": 31
+   }
+  },
+  {
+   "texto": "Quien se ensalza será humillado y quien se humilla será ensalzado. Elige hoy el último sitio.",
+   "cita": "Lc 14, 11",
+   "ir": {
+    "b": 42,
+    "c": 14,
+    "v": 11
+   }
+  },
+  {
+   "texto": "Invita a quien no puede devolverte el favor. Esa generosidad es la que más se parece a Dios.",
+   "cita": "Lc 14, 13-14",
+   "ir": {
+    "b": 42,
+    "c": 14,
+    "v": 13
+   }
+  },
+  {
+   "texto": "Sé fiel en lo pequeño de hoy; de ahí nace la fidelidad en lo grande.",
+   "cita": "Lc 16, 10",
+   "ir": {
+    "b": 42,
+    "c": 16,
+    "v": 10
+   }
+  },
+  {
+   "texto": "No puedes servir a dos señores. Que el dinero sea tu herramienta, nunca tu dueño.",
+   "cita": "Lc 16, 13",
+   "ir": {
+    "b": 42,
+    "c": 16,
+    "v": 13
+   }
+  },
+  {
+   "texto": "Reza sin desanimarte, como la viuda insistente. Dios escucha a quien no se rinde.",
+   "cita": "Lc 18, 1-8",
+   "ir": {
+    "b": 42,
+    "c": 18,
+    "v": 1
+   }
+  },
+  {
+   "texto": "Reza con la sencillez del publicano: «Oh Dios, ten compasión de mí». No hace falta más.",
+   "cita": "Lc 18, 13-14",
+   "ir": {
+    "b": 42,
+    "c": 18,
+    "v": 13
+   }
+  },
+  {
+   "texto": "Recibe la vida con la confianza de un niño: así se entra en el Reino.",
+   "cita": "Lc 18, 17",
+   "ir": {
+    "b": 42,
+    "c": 18,
+    "v": 17
+   }
+  },
+  {
+   "texto": "Como Zaqueo, nunca es tarde para cambiar y reparar lo que hiciste mal.",
+   "cita": "Lc 19, 8-10",
+   "ir": {
+    "b": 42,
+    "c": 19,
+    "v": 8
+   }
+  },
+  {
+   "texto": "La viuda pobre dio poco, pero lo dio todo. Lo que cuenta es el corazón con que das.",
+   "cita": "Lc 21, 1-4",
+   "ir": {
+    "b": 42,
+    "c": 21,
+    "v": 3
+   }
+  },
+  {
+   "texto": "El más grande es el que sirve. Busca hoy una ocasión de servir sin que nadie lo note.",
+   "cita": "Lc 22, 26-27",
+   "ir": {
+    "b": 42,
+    "c": 22,
+    "v": 26
+   }
+  },
+  {
+   "texto": "En las horas difíciles reza como Jesús: «Que no se haga mi voluntad, sino la tuya».",
+   "cita": "Lc 22, 42",
+   "ir": {
+    "b": 42,
+    "c": 22,
+    "v": 42
+   }
+  },
+  {
+   "texto": "Perdona como Jesús en la cruz: «Padre, perdónalos, porque no saben lo que hacen».",
+   "cita": "Lc 23, 34",
+   "ir": {
+    "b": 42,
+    "c": 23,
+    "v": 34
+   }
+  },
+  {
+   "texto": "Nunca es tarde para volverse a Dios: al buen ladrón le prometió el paraíso ese mismo día.",
+   "cita": "Lc 23, 43",
+   "ir": {
+    "b": 42,
+    "c": 23,
+    "v": 43
+   }
+  },
+  {
+   "texto": "Como a los de Emaús, Jesús camina a tu lado aunque no lo reconozcas. Deja que arda tu corazón.",
+   "cita": "Lc 24, 32",
+   "ir": {
+    "b": 42,
+    "c": 24,
+    "v": 32
+   }
+  },
+  {
+   "texto": "Basta una fe pequeña como un grano de mostaza para lo que parece imposible.",
+   "cita": "Lc 17, 6",
+   "ir": {
+    "b": 42,
+    "c": 17,
+    "v": 6
+   }
+  },
+  {
+   "texto": "Construye sobre roca: no basta con escuchar, hay que poner en práctica.",
+   "cita": "Lc 6, 47-48",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 47
+   }
+  },
+  {
+   "texto": "De lo que rebosa el corazón habla la boca. Cuida lo que guardas dentro.",
+   "cita": "Lc 6, 45",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 45
+   }
+  },
+  {
+   "texto": "No escondas tu luz debajo de la cama; deja que ilumine a quien tienes cerca.",
+   "cita": "Lc 8, 16",
+   "ir": {
+    "b": 42,
+    "c": 8,
+    "v": 16
+   }
+  },
+  {
+   "texto": "Sé tierra buena: escucha con corazón noble y da fruto con perseverancia.",
+   "cita": "Lc 8, 15",
+   "ir": {
+    "b": 42,
+    "c": 8,
+    "v": 15
+   }
+  },
+  {
+   "texto": "No tengas miedo: vales más que muchos pajarillos, y Dios cuenta hasta tus cabellos.",
+   "cita": "Lc 12, 6-7",
+   "ir": {
+    "b": 42,
+    "c": 12,
+    "v": 7
+   }
+  },
+  {
+   "texto": "Vive despierto, con la lámpara encendida: el bien que puedes hacer hoy no esperes a mañana.",
+   "cita": "Lc 12, 35",
+   "ir": {
+    "b": 42,
+    "c": 12,
+    "v": 35
+   }
+  },
+  {
+   "texto": "A quien mucho se le dio, mucho se le pedirá. Pon tus dones al servicio de los demás.",
+   "cita": "Lc 12, 48",
+   "ir": {
+    "b": 42,
+    "c": 12,
+    "v": 48
+   }
+  },
+  {
+   "texto": "Quien pierde su vida por amor, la gana. Lo que se da no se pierde.",
+   "cita": "Lc 9, 24",
+   "ir": {
+    "b": 42,
+    "c": 9,
+    "v": 24
+   }
+  },
+  {
+   "texto": "Dichosos los pobres y los que lloran: Dios está más cerca de lo que crees en la dificultad.",
+   "cita": "Lc 6, 20-21",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 20
+   }
+  },
+  {
+   "texto": "«No temas; basta que creas.» Ante lo que te preocupa hoy, confía.",
+   "cita": "Lc 8, 50",
+   "ir": {
+    "b": 42,
+    "c": 8,
+    "v": 50
+   }
+  },
+  {
+   "texto": "Ama a Dios con todo tu corazón y al prójimo como a ti mismo: ahí está todo.",
+   "cita": "Lc 10, 27",
+   "ir": {
+    "b": 42,
+    "c": 10,
+    "v": 27
+   }
+  },
+  {
+   "texto": "Al rezar el Padrenuestro, recuerda: perdónanos como también nosotros perdonamos.",
+   "cita": "Lc 11, 4",
+   "ir": {
+    "b": 42,
+    "c": 11,
+    "v": 4
+   }
+  },
+  {
+   "texto": "Toma tu cruz de cada día y sigue a Jesús. Lo pequeño de hoy también cuenta.",
+   "cita": "Lc 9, 23",
+   "ir": {
+    "b": 42,
+    "c": 9,
+    "v": 23
+   }
+  },
+  {
+   "texto": "Donde entres, lleva la paz: «Paz a esta casa».",
+   "cita": "Lc 10, 5",
+   "ir": {
+    "b": 42,
+    "c": 10,
+    "v": 5
+   }
+  },
+  {
+   "texto": "Siéntate en el último puesto; deja que sean otros los que te digan «sube más arriba».",
+   "cita": "Lc 14, 10",
+   "ir": {
+    "b": 42,
+    "c": 14,
+    "v": 10
+   }
+  },
+  {
+   "texto": "Antes de construir, calcula los gastos: sé prudente y piensa bien tus decisiones.",
+   "cita": "Lc 14, 28",
+   "ir": {
+    "b": 42,
+    "c": 14,
+    "v": 28
+   }
+  },
+  {
+   "texto": "Hay alegría en el cielo por cada persona que se convierte. Alégrate tú también por los demás.",
+   "cita": "Lc 15, 7",
+   "ir": {
+    "b": 42,
+    "c": 15,
+    "v": 7
+   }
+  },
+  {
+   "texto": "Aunque estés cansado y no hayas pescado nada, como Pedro: «En tu palabra, echaré las redes».",
+   "cita": "Lc 5, 5",
+   "ir": {
+    "b": 42,
+    "c": 5,
+    "v": 5
+   }
+  },
+  {
+   "texto": "Jesús se retiraba a lugares tranquilos a orar. Busca hoy tu momento de silencio.",
+   "cita": "Lc 5, 16",
+   "ir": {
+    "b": 42,
+    "c": 5,
+    "v": 16
+   }
+  },
+  {
+   "texto": "Jesús vino a llamar a los pecadores. Nadie queda fuera de su mirada, tampoco tú.",
+   "cita": "Lc 5, 32",
+   "ir": {
+    "b": 42,
+    "c": 5,
+    "v": 32
+   }
+  },
+  {
+   "texto": "La humildad del centurión abre puertas: «Señor, no soy digno», pero confío en tu palabra.",
+   "cita": "Lc 7, 6-7",
+   "ir": {
+    "b": 42,
+    "c": 7,
+    "v": 6
+   }
+  },
+  {
+   "texto": "Quien mucho ama, mucho es perdonado. El amor sana lo que el error rompió.",
+   "cita": "Lc 7, 47",
+   "ir": {
+    "b": 42,
+    "c": 7,
+    "v": 47
+   }
+  },
+  {
+   "texto": "«Tu fe te ha salvado; vete en paz.» Camina hoy con esa paz.",
+   "cita": "Lc 7, 50",
+   "ir": {
+    "b": 42,
+    "c": 7,
+    "v": 50
+   }
+  },
+  {
+   "texto": "El más pequeño entre vosotros es el más grande. Acoge a quien parece no contar.",
+   "cita": "Lc 9, 48",
+   "ir": {
+    "b": 42,
+    "c": 9,
+    "v": 48
+   }
+  },
+  {
+   "texto": "Quien no está contra vosotros está a vuestro favor. Busca lo que une, no lo que separa.",
+   "cita": "Lc 9, 50",
+   "ir": {
+    "b": 42,
+    "c": 9,
+    "v": 50
+   }
+  },
+  {
+   "texto": "Hay más alegría en dar que en recibir, como enseñó Jesús.",
+   "cita": "Hch 20, 35",
+   "ir": {
+    "b": 44,
+    "c": 20,
+    "v": 35
+   }
+  },
+  {
+   "texto": "Comparte con alegría y sencillez de corazón, como los primeros cristianos.",
+   "cita": "Hch 2, 46",
+   "ir": {
+    "b": 44,
+    "c": 2,
+    "v": 46
+   }
+  },
+  {
+   "texto": "Cuida la unidad: un solo corazón y una sola alma con los que te rodean.",
+   "cita": "Hch 4, 32",
+   "ir": {
+    "b": 44,
+    "c": 4,
+    "v": 32
+   }
+  },
+  {
+   "texto": "Sé coherente: hay que obedecer a Dios antes que a los hombres.",
+   "cita": "Hch 5, 29",
+   "ir": {
+    "b": 44,
+    "c": 5,
+    "v": 29
+   }
+  },
+  {
+   "texto": "Con vuestra perseverancia salvaréis vuestras almas. No abandones lo bueno que has empezado.",
+   "cita": "Lc 21, 19",
+   "ir": {
+    "b": 42,
+    "c": 21,
+    "v": 19
+   }
+  },
+  {
+   "texto": "Dichosos los que escuchan la Palabra de Dios y la cumplen. Llévate hoy una frase y vívela.",
+   "cita": "Lc 11, 28",
+   "ir": {
+    "b": 42,
+    "c": 11,
+    "v": 28
+   }
+  },
+  {
+   "texto": "No basta con decir «Señor, Señor»: lo que cuenta es hacer lo que él dice.",
+   "cita": "Lc 6, 46",
+   "ir": {
+    "b": 42,
+    "c": 6,
+    "v": 46
+   }
+  },
+  {
+   "texto": "No calles el bien que ves: si los discípulos callaran, gritarían las piedras.",
+   "cita": "Lc 19, 40",
+   "ir": {
+    "b": 42,
+    "c": 19,
+    "v": 40
+   }
+  },
+  {
+   "texto": "Alégrate de lo esencial: tu nombre está escrito en el cielo.",
+   "cita": "Lc 10, 20",
+   "ir": {
+    "b": 42,
+    "c": 10,
+    "v": 20
+   }
+  },
+  {
+   "texto": "Como María, guarda lo que vives y medítalo en tu corazón.",
+   "cita": "Lc 2, 19",
+   "ir": {
+    "b": 42,
+    "c": 2,
+    "v": 19
+   }
+  },
+  {
+   "texto": "Para Dios nada es imposible. Ponle hoy delante lo que te parece sin salida.",
+   "cita": "Lc 1, 37",
+   "ir": {
+    "b": 42,
+    "c": 1,
+    "v": 37
+   }
+  },
+  {
+   "texto": "Di con María: «Hágase en mí según tu palabra». La disponibilidad abre caminos.",
+   "cita": "Lc 1, 38",
+   "ir": {
+    "b": 42,
+    "c": 1,
+    "v": 38
+   }
+  },
+  {
+   "texto": "Gloria a Dios y paz a los hombres: sé hoy instrumento de paz en tu casa y en tu trabajo.",
+   "cita": "Lc 2, 14",
+   "ir": {
+    "b": 42,
+    "c": 2,
+    "v": 14
+   }
+  },
+  {
+   "texto": "Cuando te sientas incapaz, recuerda: Dios derriba a los poderosos y enaltece a los humildes.",
+   "cita": "Lc 1, 52",
+   "ir": {
+    "b": 42,
+    "c": 1,
+    "v": 52
+   }
+  }
+ ]
+}

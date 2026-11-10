@@ -1598,6 +1598,44 @@
 
   window.addEventListener('hashchange', route);
 
+  // ---------- Consejo del día ----------
+  // Un consejo distinto cada día (el mismo durante todo el día). Si se cierra, vuelve al día siguiente;
+  // desde el menú se puede volver a ver.
+  let tips = [];
+  const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+  function tipOfToday() {
+    if (!tips.length) return null;
+    const d = new Date();
+    const day = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+    return tips[day % tips.length];
+  }
+  function showTip(force) {
+    const t = tipOfToday(), banner = $('#tipBanner');
+    if (!t || (!force && store.get('tipClosed', '') === todayKey())) { banner.hidden = true; return; }
+    $('#tipText').textContent = t.texto;
+    $('#tipRef').textContent = t.ir ? `${t.cita} · Leer el pasaje ›` : t.cita;
+    $('#tipRef').disabled = !t.ir;
+    banner.classList.remove('closing');
+    banner.hidden = false;
+  }
+  $('#tipClose').addEventListener('click', () => {
+    store.set('tipClosed', todayKey());
+    const banner = $('#tipBanner');
+    banner.classList.add('closing');
+    setTimeout(() => { banner.hidden = true; banner.classList.remove('closing'); }, 220);
+  });
+  $('#tipRef').addEventListener('click', () => {
+    const t = tipOfToday(); if (!t || !t.ir) return;
+    go(t.ir.b, t.ir.c, t.ir.v);
+  });
+  $('#tipBtn').addEventListener('click', () => { closeDrawer(); showTip(true); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  async function initTips() {
+    try { tips = (await (await fetch('/consejos.json', { cache: 'no-store' })).json()).consejos || []; } catch { tips = []; }
+    showTip(false);
+  }
+  // si la app queda abierta de un día para otro, aparece el consejo nuevo
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && tips.length) showTip(false); });
+
   // ---------- Inicio ----------
   (async () => {
     try {
@@ -1610,5 +1648,6 @@
     await route();
     renderCommentIndex(); renderForumIndex(); renderTopicList(); refreshRibbons();
     initNews();
+    initTips();
   })();
 })();

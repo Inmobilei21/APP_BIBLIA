@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "3.6",
+      "date": "2026-11-10",
+      "changes": [
+        "Nuevo «Consejo del día»: cada día, arriba del texto, un consejo para la vida inspirado en las enseñanzas de Jesús, con su cita. Toca la cita para leer el pasaje.",
+        "Se cierra con la ✕ y vuelve al día siguiente; también puedes verlo desde el menú, en «Consejo del día»."
+      ]
+    },
+    {
       "version": "3.5",
       "date": "2026-11-10",
       "changes": [
