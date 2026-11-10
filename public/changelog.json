@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "4.1",
+      "date": "2026-11-10",
+      "changes": [
+        "Desplazar con el pulgar desde el centro ya no se confunde con pasar página: solo cuenta como pasar página un gesto claramente horizontal.",
+        "Si un gesto empieza de lado pero sigue hacia arriba o abajo, la página se desplaza igualmente."
+      ]
+    },
+    {
       "version": "4.0",
       "date": "2026-11-10",
       "changes": [

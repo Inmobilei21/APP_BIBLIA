@@ -891,7 +891,7 @@
   (() => {
     const reader = $('#reader');
     let sx = 0, sy = 0, dir = null, mode = null, w = 0, dx = 0, dy = 0, t0 = 0, busy = false;
-    let vx = 0, lastX = 0, lastT = 0;   // velocidad del dedo
+    let vx = 0, vy = 0, lastX = 0, lastY = 0, lastT = 0;   // velocidad del dedo
     let flip = null, raf = 0;
     const blocked = el => el.closest('input, textarea, .modal-scrim, .chapter-grid, .vactions, .mention-menu') ||
       document.querySelector('.modal-scrim:not([hidden])') || document.body.classList.contains('editing');
@@ -1048,8 +1048,8 @@
         document.querySelectorAll('.curl-stage').forEach(x => x.remove());
       }
       if (busy || e.touches.length !== 1 || blocked(e.target)) { dir = 'none'; return; }
-      sx = lastX = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = lastT = performance.now();
-      dir = null; dx = 0; dy = 0; vx = 0;
+      sx = lastX = e.touches[0].clientX; sy = lastY = e.touches[0].clientY; t0 = lastT = performance.now();
+      dir = null; dx = 0; dy = 0; vx = 0; vy = 0;
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
       target = e.target;
@@ -1059,15 +1059,31 @@
     }, { passive: true });
     function move(e) {
       if (dir === 'none') return;
-      const tx = e.touches[0].clientX, x = tx - sx, y = e.touches[0].clientY - sy;
+      const tx = e.touches[0].clientX, ty = e.touches[0].clientY, x = tx - sx, y = ty - sy;
       // Solo cuando ya está claro que el gesto es horizontal (pasar página) se impide desplazar la página.
       // Antes de decidirlo nunca: si no, el iPhone cancelaría el desplazamiento normal hacia arriba o abajo.
-      if (e.cancelable && dir === 'h') e.preventDefault();
+      if (e.cancelable && (dir === 'h' || dir === 'v')) e.preventDefault();
       const now = performance.now();
-      if (now > lastT) { vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000); lastX = tx; lastT = now; }
+      if (now > lastT) {
+        vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000);
+        vy = vy * 0.6 + ((ty - lastY) / (now - lastT)) * 0.4;
+        lastX = tx; lastT = now;
+      }
+      // Desplazamiento hecho por la app (gesto que empezó como pasar página y resultó ser vertical)
+      if (dir === 'v') { window.scrollBy(0, lastY - ty); lastY = ty; return; }
+      lastY = ty;
+      if (dir === 'h' && mode === 'chapter' && Math.abs(y) > Math.abs(x) && Math.abs(y) > 16 &&
+          (!flip || flip === 'starting' || flip.p < 0.12)) {
+        // Red de seguridad: era un desplazamiento con el pulgar en arco, no un paso de página.
+        // Se cancela la hoja y la propia app desplaza la página con el dedo.
+        abortFlip();
+        dir = 'v'; window.scrollBy(0, -y); return;
+      }
       if (!dir) {
-        if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
-        dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
+        // Solo cuenta como pasar página un gesto claramente horizontal (menos de unos 25° de inclinación);
+        // un desplazamiento con el pulgar en arco ya no se confunde.
+        if (Math.hypot(x, y) < 12) return;
+        dir = Math.abs(x) > Math.abs(y) * 2.1 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
         if (dir !== 'h') { detach(); return; }   // desplazamiento normal: se deja de escuchar el gesto
         if (e.cancelable) e.preventDefault();
         if (mode === 'drawer') drawer.style.transition = 'none';
@@ -1082,8 +1098,29 @@
       } else if (flip && flip !== 'starting') schedule();
       else if (!flip) reader.style.transform = `translateX(${dx / 4}px)`;   // no hay más capítulos: el texto se resiste
     }
+    function abortFlip() {
+      if (flip && flip !== 'starting') { flip.stage.remove(); document.body.classList.remove('flipping'); }
+      cancelAnimationFrame(raf); raf = 0;
+      flip = null; busy = false;
+      reader.style.transition = ''; reader.style.transform = ''; reader.style.willChange = '';
+    }
+    // Inercia al soltar un desplazamiento hecho por la app, como el del propio iPhone
+    let glide = 0;
+    function momentum(v) {   // v: px/ms del dedo (positivo = hacia abajo)
+      cancelAnimationFrame(glide);
+      let last = performance.now();
+      const step = now => {
+        const dt = Math.min(40, now - last); last = now;
+        window.scrollBy(0, -v * dt);
+        v *= Math.pow(0.95, dt / 16);
+        if (Math.abs(v) > 0.02) glide = requestAnimationFrame(step);
+      };
+      if (Math.abs(v) > 0.05) glide = requestAnimationFrame(step);
+    }
+    document.addEventListener('touchstart', () => cancelAnimationFrame(glide), { passive: true });
     async function end() {
       detach();
+      if (dir === 'v') { dir = null; momentum(vy); return; }
       if (dir !== 'h') { dir = null; return; }
       dir = null;
       if (mode === 'drawer') {
