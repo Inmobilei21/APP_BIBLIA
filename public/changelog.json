@@ -1,28 +1,6 @@
 {
   "versions": [
     {
-      "version": "4.2",
-      "date": "2026-11-10",
-      "changes": [
-        "Se deshace el cambio de la versión 4.1 y la app ya no interfiere nunca con el desplazamiento de la página, como antes."
-      ]
-    },
-    {
-      "version": "4.0",
-      "date": "2026-11-10",
-      "changes": [
-        "Desplazar desde el centro de la pantalla ya funciona al primer intento: al apoyar el dedo sobre el texto, el iPhone ya no intenta seleccionarlo.",
-        "Para copiar un versículo, usa «Compartir»."
-      ]
-    },
-    {
-      "version": "3.9",
-      "date": "2026-11-10",
-      "changes": [
-        "Desplazamiento más ligero y fiable, sobre todo en iPhone más antiguos: la página empieza a moverse al primer gesto."
-      ]
-    },
-    {
       "version": "3.8",
       "date": "2026-11-10",
       "changes": [

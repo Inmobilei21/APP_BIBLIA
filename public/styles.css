@@ -29,7 +29,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 12px;
   padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
-  background: #fff;
+  background: rgba(255,255,255,.94); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
 }
 .topbar::after {
@@ -380,6 +380,7 @@ body.editing main { padding-bottom: 70vh; }
 
 /* ---------- v2.9 ---------- */
 .chapter-nav { justify-content: center; }
+#reader { will-change: transform; }
 
 .chapter-foot { justify-content: center; gap: 22px; flex-wrap: wrap; }
 .foot-link { border: 0; background: none; color: var(--ink-soft); font-size: 14px; text-decoration: underline; padding: 6px; }
@@ -389,7 +390,7 @@ body.editing main { padding-bottom: 70vh; }
 .scroll-btn {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 25;
   width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
-  border: 1px solid var(--gold-light); background: #fff;
+  border: 1px solid var(--gold-light); background: rgba(255,255,255,.94); backdrop-filter: blur(6px);
   box-shadow: 0 4px 14px rgba(95, 70, 10, .18); color: var(--gold-deep);
 }
 .scroll-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
@@ -531,14 +532,3 @@ body { padding-top: calc(59px + env(safe-area-inset-top)); }
 /* mientras se pasa la hoja, la página no se desplaza */
 body.flipping { touch-action: none; }
 
-
-/* ---------- v4.0: desplazar desde el centro del texto ---------- */
-/* Al apoyar el dedo sobre el texto, el iPhone podía empezar a seleccionarlo (o mostrar el menú de copiar)
-   en lugar de desplazar la página. En la zona de lectura no se selecciona texto; en los cuadros de escritura sí. */
-#reader, .chapter-nav, #verses .block {
-  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
-  touch-action: manipulation;
-}
-#reader textarea, #reader input, .modal textarea, .modal input {
-  -webkit-user-select: text; user-select: text; -webkit-touch-callout: default;
-}

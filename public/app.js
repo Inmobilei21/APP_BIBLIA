@@ -1053,22 +1053,26 @@
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
       target = e.target;
-      // pasivo: la app nunca bloquea el desplazamiento del iPhone (el encabezado está fijo, así que no se mueve)
-      target.addEventListener('touchmove', move, { passive: true });
+      // no pasivo: así se puede impedir que el iPhone desplace la página mientras se pasa la hoja
+      target.addEventListener('touchmove', move, { passive: false });
       target.addEventListener('touchend', end); target.addEventListener('touchcancel', end);
     }, { passive: true });
     function move(e) {
       if (dir === 'none') return;
       const tx = e.touches[0].clientX, x = tx - sx, y = e.touches[0].clientY - sy;
+      // Solo cuando ya está claro que el gesto es horizontal (pasar página) se impide desplazar la página.
+      // Antes de decidirlo nunca: si no, el iPhone cancelaría el desplazamiento normal hacia arriba o abajo.
+      if (e.cancelable && dir === 'h') e.preventDefault();
       const now = performance.now();
       if (now > lastT) { vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000); lastX = tx; lastT = now; }
       if (!dir) {
         if (Math.abs(x) < 10 && Math.abs(y) < 10) return;
         dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
-        if (dir !== 'h') { detach(); return; }   // desplazamiento normal: se deja de escuchar el gesto
+        if (dir !== 'h') return;
+        if (e.cancelable) e.preventDefault();
         if (mode === 'drawer') drawer.style.transition = 'none';
         else if (neighbour(x < 0 ? 1 : -1)) { busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
-        else { reader.style.transition = 'none'; reader.style.willChange = 'transform'; }
+        else reader.style.transition = 'none';
       }
       dx = x; dy = y;
       if (mode === 'drawer') {
@@ -1091,7 +1095,7 @@
       }
       if (!flip) {
         reader.style.transition = 'transform .25s cubic-bezier(.2,.8,.3,1)'; reader.style.transform = '';
-        setTimeout(() => { reader.style.transition = ''; reader.style.willChange = ''; }, 260);
+        setTimeout(() => { reader.style.transition = ''; }, 260);
         return;
       }
       // si la hoja aún se estaba preparando, se espera un instante
@@ -1120,26 +1124,19 @@
   // Siempre apunta hacia el final; desaparece al llegar al final del capítulo.
   (() => {
     const btn = $('#scrollBtn');
-    // ligero mientras se desplaza: el alto de la página se mide solo cuando cambia, y como mucho una vez por fotograma
-    let pageH = 0, queued = false;
-    const measure = () => { pageH = document.documentElement.scrollHeight; };
-    const apply = () => {
-      queued = false;
-      const max = pageH - window.innerHeight;
-      const hide = max < 200 || window.scrollY >= max - 40 ||
+    const update = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      btn.hidden = max < 200 || window.scrollY >= max - 40 ||
         document.body.classList.contains('scroll-locked') || document.body.classList.contains('flipping');
-      if (btn.hidden !== hide) btn.hidden = hide;
     };
-    const update = () => { if (!queued) { queued = true; requestAnimationFrame(apply); } };
-    const remeasure = () => { measure(); update(); };
     btn.addEventListener('click', () => {
       window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
     });
     window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', remeasure);
-    new MutationObserver(remeasure).observe($('#verses'), { childList: true, subtree: true });
+    window.addEventListener('resize', update);
+    new MutationObserver(update).observe($('#verses'), { childList: true, subtree: true });
     new MutationObserver(update).observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    remeasure();
+    update();
   })();
 
   // ---------- Guardar un archivo eligiendo dónde ----------
