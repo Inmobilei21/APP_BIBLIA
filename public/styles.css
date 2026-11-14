@@ -530,3 +530,11 @@ body.flipping .scroll-btn { display: none; }
 html, body { overscroll-behavior-y: none; }
 /* mientras se pasa la hoja, la página no se desplaza */
 body.flipping { touch-action: none; }
+
+/* ---------- v4.5: comentarios de subtítulos y divisiones en letra normal ---------- */
+/* El cuadro de escribir y los botones estaban dentro del subtítulo y heredaban su negrita
+   (y, en las divisiones «I., II.…», las mayúsculas y el centrado). */
+.section-title .vactions, .division .vactions {
+  font-weight: 400; font-size: 16px; text-transform: none; letter-spacing: 0; text-align: left; color: var(--ink);
+}
+.section-title .vactions textarea, .division .vactions textarea { font-weight: 400; font-size: 16px; }

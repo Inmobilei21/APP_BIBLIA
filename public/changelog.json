@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "4.5",
+      "date": "2026-11-14",
+      "changes": [
+        "Al escribir un comentario sobre un subtítulo, el texto ya no sale en negrita."
+      ]
+    },
+    {
       "version": "3.5",
       "date": "2026-11-10",
       "changes": [
