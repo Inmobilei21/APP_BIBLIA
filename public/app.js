@@ -1154,6 +1154,19 @@
   const fileName = s => s.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
 
   // ---------- Exportar el capítulo (o el tema) en PDF, con el aspecto de la app ----------
+  // Tipografía del PDF: Arimo (mismas medidas que Helvetica) con letras griegas, hebreas y acentos.
+  // La Helvetica que trae el generador solo tiene las letras de Europa occidental: el griego salía corrupto.
+  let pdfFontsReady = null, pdfFonts = null;
+  const toBase64 = buf => {
+    const bytes = new Uint8Array(buf); let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  };
+  const loadPdfFonts = () => pdfFontsReady || (pdfFontsReady = Promise.all(['Regular', 'Bold', 'Italic'].map(n =>
+    fetch(`/vendor/fonts/Arimo-${n}.ttf`).then(r => { if (!r.ok) throw new Error('No se pudo cargar la tipografía'); return r.arrayBuffer(); })
+      .then(buf => [n, toBase64(buf)])))
+    .then(list => (pdfFonts = Object.fromEntries(list)))
+    .catch(e => { pdfFontsReady = null; throw e; }));
   let jsPDFReady = null;
   const loadJsPDF = () => jsPDFReady || (jsPDFReady = new Promise((ok, ko) => {
     const sc = document.createElement('script'); sc.src = '/vendor/jspdf.umd.min.js';
@@ -1182,6 +1195,7 @@
     closeActions();
     pdfFile = null;
     loadJsPDF().catch(() => {});   // se prepara ya el generador, para guardar al primer toque
+    loadPdfFonts().catch(() => {});
     const hasComments = state.comments.some(c => c.book === state.book && c.chapter === state.chapter);
     $('#pdfName').textContent = pdfLabel() + '.pdf';
     $('#pdfCommentsRow').hidden = !hasComments;
@@ -1199,6 +1213,7 @@
     try {
       // con el generador ya cargado todo ocurre en el mismo toque (el iPhone lo exige para abrir «Compartir»)
       const JsPDF = window.jspdf?.jsPDF || (st.textContent = 'Preparando…', await loadJsPDF());
+      if (!pdfFonts) { st.textContent = 'Preparando…'; await loadPdfFonts(); }
       const blob = buildPdf(JsPDF, !$('#pdfCommentsRow').hidden && $('#pdfComments').checked);
       pdfFile = new File([blob], fileName(pdfLabel()) + '.pdf', { type: 'application/pdf' });
       st.textContent = '';
@@ -1212,13 +1227,21 @@
   // comentarios en cursiva con la línea dorada, y pie con el nombre y el número de página.
   function buildPdf(JsPDF, withComments) {
     const pdf = new JsPDF({ unit: 'pt', format: 'a4' });
+    let family = 'helvetica';
+    if (pdfFonts) {
+      for (const [n, style] of [['Regular', 'normal'], ['Bold', 'bold'], ['Italic', 'italic']]) {
+        pdf.addFileToVFS(`Arimo-${n}.ttf`, pdfFonts[n]);
+        pdf.addFont(`Arimo-${n}.ttf`, 'Arimo', style);
+      }
+      family = 'Arimo';
+    }
     const W = pdf.internal.pageSize.getWidth(), H = pdf.internal.pageSize.getHeight();
     const M = 58, TOP = 64, BOTTOM = 70, CW = W - 2 * M;
     const GOLD = [176, 138, 46], DEEP = [138, 106, 28], INK = [43, 36, 23], SOFT = [110, 98, 80], LIGHT = [232, 211, 154];
     const book = bookOf(state.book), doc = chapterDoc();
     let y = TOP;
     const color = c => pdf.setTextColor(...c);
-    const font = (style, size) => { pdf.setFont('helvetica', style); pdf.setFontSize(size); };
+    const font = (style, size) => { pdf.setFont(family, style); pdf.setFontSize(size); };
     const ensure = h => { if (y + h > H - BOTTOM) { pdf.addPage(); y = TOP; } };
     const plain = t => String(t).replace(/\/\[([^\]]+)\]/g, '$1');
     // reparte el texto en líneas; la primera puede empezar más a la derecha (tras el número)
@@ -1346,7 +1369,7 @@
     if (e.key === 'Escape') {
       if (!$('#pdfModal').hidden) closePdf();
       else if (!$('#backupModal').hidden) closeBackup();
-      else if (!$('#claudeModal').hidden) closeClaude();
+      else if (!$('#searchModal').hidden) closeSearch();
       else if (!$('#editorModal').hidden) closeEditor();
       else if (drawer.classList.contains('open')) closeDrawer();
       else closeActions();
@@ -1543,57 +1566,108 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
   }
 
-  // ---------- Peticiones de cambios a Claude ----------
-  const STATUS = { pending: 'Pendiente', working: 'En curso', done: 'Hecho', rejected: 'No realizado' };
-  const pinApi = (method, url, body) => fetch(url, {
-    method, cache: 'no-store',
-    headers: { 'Content-Type': 'application/json', 'X-Owner-Token': store.get('pin', '') },
-    body: body ? JSON.stringify(body) : undefined,
-  }).then(async r => {
-    const data = r.status === 204 ? null : await r.json().catch(() => ({}));
-    if (!r.ok) { const e = new Error((data && data.error) || 'Error ' + r.status); e.status = r.status; throw e; }
-    return data;
-  });
-  async function loadProposals() {
-    try {
-      const list = await pinApi('GET', '/api/proposals');
-      $('#claudePinBox').hidden = true; $('#claudeMain').hidden = false;
-      $('#claudeList').innerHTML = list.length ? list.map(p => `
-        <div class="claude-item">
-          <div class="claude-meta"><span class="claude-status ${p.status}">${STATUS[p.status] || p.status}</span><span>${fmtDate(p.createdAt)}</span></div>
-          <div class="claude-text">${esc(p.text)}</div>
-          ${p.reply ? `<div class="claude-reply"><b>Claude:</b> ${esc(p.reply)}</div>` : ''}
-        </div>`).join('') : '<p class="empty">Aún no has pedido ningún cambio.</p>';
-      return true;
-    } catch (e) {
-      if (e.status === 401) { $('#claudeMain').hidden = true; $('#claudePinBox').hidden = false; $('#claudePin').focus(); }
-      else toast(e.message);
-      return false;
+  // ---------- Buscar ----------
+  // Busca a la vez en el texto (versículos, subtítulos y divisiones), comentarios, temas y discusión.
+  // Sin distinguir mayúsculas ni tildes; resultados agrupados, con las palabras resaltadas.
+  const sfold = t => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  let searchData = null, searchFilter = 'all', searchTimer = 0, searchSeq = 0;
+  // Resalta las palabras buscadas en el texto original (comparando sin tildes, letra a letra)
+  function highlight(text, words) {
+    const chars = [...String(text)], folded = chars.map(c => sfold(c)[0] || c);
+    const flat = folded.join(''), marks = new Array(chars.length).fill(false);
+    for (const w of words) {
+      let i = flat.indexOf(w);
+      while (i !== -1) { for (let k = i; k < i + w.length && k < marks.length; k++) marks[k] = true; i = flat.indexOf(w, i + w.length); }
     }
+    let html = '', open = false;
+    chars.forEach((c, i) => {
+      if (marks[i] && !open) { html += '<mark>'; open = true; }
+      if (!marks[i] && open) { html += '</mark>'; open = false; }
+      html += esc(c);
+    });
+    return open ? html + '</mark>' : html;
   }
-  $('#claudeBtn').addEventListener('click', () => {
-    closeDrawer(); $('#claudeModal').hidden = false; lockScroll('claude');
-    $('#claudeMain').hidden = $('#claudePinBox').hidden = true;
-    loadProposals();
-  });
-  const closeClaude = () => { $('#claudeModal').hidden = true; unlockScroll('claude'); };
-  $('#claudeClose').addEventListener('click', closeClaude);
-  $('#claudePinOk').addEventListener('click', async () => {
-    store.set('pin', $('#claudePin').value.trim());
-    if (!(await loadProposals())) toast('PIN incorrecto');
-  });
-  $('#claudePin').addEventListener('keydown', e => { if (e.key === 'Enter') $('#claudePinOk').click(); });
-  $('#claudeSend').addEventListener('click', async () => {
-    const text = $('#claudeText').value.trim();
-    if (!text) return toast('Escribe lo que quieres cambiar');
-    const btn = $('#claudeSend'); btn.disabled = true;
+  // Fragmento alrededor de la primera coincidencia, para textos largos
+  function snippet(text, words, max = 220) {
+    const t = String(text).replace(/\/\[([^\]]+)\]/g, '$1');
+    if (t.length <= max) return t;
+    const i = Math.max(0, sfold(t).indexOf(words[0]));
+    const start = Math.max(0, i - 70), end = Math.min(t.length, start + max);
+    return (start > 0 ? '…' : '') + t.slice(start, end) + (end < t.length ? '…' : '');
+  }
+  function placeLabel(r) {
+    const book = bookOf(r.book); if (!book) return '';
+    if (book.topic) return `Tema · ${book.name}`;
+    if (r.target) return `${book.short} ${r.chapter} · ${r.kind === 'd' ? 'división' : 'subtítulo'}`;
+    return `${book.short} ${r.chapter}:${r.verse}`;
+  }
+  function renderSearch() {
+    const box = $('#searchResults'), q = $('#searchInput').value.trim();
+    if (!q) { box.innerHTML = '<p class="search-empty">Escribe una o varias palabras. Busca en el texto de Lucas y Hechos, en tus comentarios, en los temas y en la discusión.</p>'; return; }
+    if (!searchData) { box.innerHTML = '<p class="search-empty">Buscando…</p>'; return; }
+    const words = sfold(q).split(/\s+/).filter(Boolean);
+    const t = searchData.totals || {};
+    const groups = [
+      ['text', 'Texto', searchData.text.map(r => ({ goto: `${r.book}:${r.chapter}:${r.verse}:${r.target}`, place: placeLabel(r), body: highlight(snippet(r.text, words), words), cls: r.kind === 'v' ? '' : 'is-title' }))],
+      ['comments', 'Comentarios', searchData.comments.map(r => ({ goto: `${r.book}:${r.chapter}:${r.verse}:${r.target}`, place: placeLabel(r), body: highlight(snippet(r.text, words), words) }))],
+      ['topics', 'Temas', searchData.topics.map(r => ({ topic: r.id, place: 'Tema', body: highlight(r.title, words) }))],
+      ['posts', 'Discusión', searchData.posts.map(r => ({ goto: `${r.book}:${r.chapter}:${r.verse}:`, forum: true, place: `${placeLabel(r)} · ${esc(r.name)}`, body: highlight(snippet(r.text, words), words) }))],
+    ];
+    // contadores en los filtros
+    document.querySelectorAll('#searchChips [data-f]').forEach(c => {
+      const f = c.dataset.f, n = f === 'all' ? (t.text || 0) + (t.comments || 0) + (t.topics || 0) + (t.posts || 0) : (t[f] || 0);
+      c.innerHTML = `${c.dataset.label || (c.dataset.label = c.textContent)}${q ? ` <span>${n}</span>` : ''}`;
+    });
+    const shown = groups.filter(([k, , list]) => (searchFilter === 'all' || searchFilter === k) && list.length);
+    if (!shown.length) { box.innerHTML = `<p class="search-empty">No hay resultados para «${esc(q)}».</p>`; return; }
+    box.innerHTML = shown.map(([k, title, list]) => `
+      <section class="search-group">
+        <h3>${title} <span>${t[k] > list.length ? `${list.length} de ${t[k]}` : list.length}</span></h3>
+        ${list.map(it => `
+          <button class="search-item ${it.cls || ''}" ${it.topic ? `data-topic-go="${it.topic}"` : `data-goto="${it.goto}"${it.forum ? ' data-forum="1"' : ''}`}>
+            <span class="search-place">${it.place}</span>
+            <span class="search-text">${it.body}</span>
+          </button>`).join('')}
+      </section>`).join('');
+  }
+  async function runSearch() {
+    const q = $('#searchInput').value.trim(), seq = ++searchSeq;
+    store.set('lastSearch', q);
+    if (sfold(q).replace(/\s/g, '').length < 2) { searchData = null; renderSearch(); return; }
+    searchData = null; renderSearch();
     try {
-      await pinApi('POST', '/api/proposals', { text });
-      $('#claudeText').value = ''; autosize($('#claudeText'));
-      await loadProposals();
-      toast('Enviado. Claude se pone a ello ahora mismo.');
-    } catch (e) { toast('No se pudo enviar: ' + e.message); }
-    btn.disabled = false;
+      const data = await api('GET', '/api/search?q=' + encodeURIComponent(q));
+      if (seq !== searchSeq) return;   // ya se está buscando otra cosa
+      searchData = data;
+    } catch { if (seq === searchSeq) { $('#searchResults').innerHTML = '<p class="search-empty">No se pudo buscar. Revisa la conexión.</p>'; return; } }
+    renderSearch();
+  }
+  function openSearch() {
+    closeDrawer(); closeActions();
+    $('#searchModal').hidden = false; lockScroll('search');
+    const inp = $('#searchInput');
+    if (!inp.value) inp.value = store.get('lastSearch', '');
+    renderSearch();
+    if (inp.value) runSearch();
+    setTimeout(() => { inp.focus(); inp.select(); }, 50);
+  }
+  const closeSearch = () => { $('#searchModal').hidden = true; unlockScroll('search'); $('#searchInput').blur(); };
+  $('#searchBtn').addEventListener('click', openSearch);
+  $('#searchTopBtn').addEventListener('click', openSearch);
+  $('#searchClose').addEventListener('click', closeSearch);
+  $('#searchInput').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 250); });
+  $('#searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(searchTimer); runSearch(); e.target.blur(); } });
+  $('#searchChips').addEventListener('click', e => {
+    const c = e.target.closest('[data-f]'); if (!c) return;
+    searchFilter = c.dataset.f;
+    document.querySelectorAll('#searchChips [data-f]').forEach(x => x.classList.toggle('on', x === c));
+    renderSearch(); $('#searchResults').scrollTop = 0;
+  });
+  $('#searchResults').addEventListener('click', e => {
+    const it = e.target.closest('.search-item'); if (!it) return;
+    closeSearch();
+    if (it.dataset.topicGo) { go(TOPIC_BASE + +it.dataset.topicGo, 1); return; }
+    gotoRef(it.dataset.goto, it.dataset.forum ? 'forum' : undefined);
   });
 
   window.addEventListener('hashchange', route);

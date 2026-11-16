@@ -415,6 +415,32 @@ app.delete('/api/posts', requirePin, wrap(async (req, res) => {
   await store.deletePosts(ids); res.json({ deleted: ids.length });
 }));
 
+// ---------- Búsqueda: texto, comentarios, temas y discusión ----------
+// Sin distinguir mayúsculas ni tildes (también en griego); todas las palabras deben aparecer.
+const fold = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+app.get('/api/search', wrap(async (req, res) => {
+  const words = fold(req.query.q).split(/\s+/).filter(w => w.length > 0).slice(0, 8);
+  if (!words.length || words.join('').length < 2) return res.json({ text: [], comments: [], topics: [], posts: [], totals: {} });
+  const hit = t => { const f = fold(t); return words.every(w => f.includes(w)); };
+  const LIMIT = 150, out = { text: [], comments: [], topics: [], posts: [] }, totals = { text: 0, comments: 0, topics: 0, posts: 0 };
+  const push = (k, item) => { totals[k]++; if (out[k].length < LIMIT) out[k].push(item); };
+  const validBook = b => BOOKS.some(x => x.id === b) || topicOf(b);
+  const texts = (await store.allTexts()).filter(d => validBook(d.book)).sort((a, b) => a.book - b.book || a.chapter - b.chapter);
+  for (const d of texts) {
+    let pending = [], last = 0;
+    const flush = n => { pending.forEach((p, i) => { if (hit(p.text)) push('text', { book: d.book, chapter: d.chapter, verse: n, target: `t${i}`, kind: p.t, text: p.text }); }); pending = []; };
+    for (const bl of d.blocks) {
+      if (bl.t === 'v') { flush(bl.n); last = bl.n; if (hit(bl.text)) push('text', { book: d.book, chapter: d.chapter, verse: bl.n, target: '', kind: 'v', text: bl.text }); }
+      else pending.push(bl);
+    }
+    flush(last + 1);
+  }
+  for (const c of await store.list()) if (validBook(c.book) && hit(c.text)) push('comments', { book: c.book, chapter: c.chapter, verse: c.verse, target: c.target || '', text: c.text });
+  for (const t of topics) if (hit(t.title)) push('topics', { id: t.id, title: t.title });
+  for (const p of await store.listPosts()) if (validBook(p.book) && hit(p.text + ' ' + p.name)) push('posts', { book: p.book, chapter: p.chapter, verse: p.verse, name: p.name, text: p.text });
+  res.json({ ...out, totals });
+}));
+
 app.get('/api/health', (req, res) => res.json({ ok: true, storage: store.kind.startsWith('archivo') ? 'file' : 'postgres' }));
 // Marcapáginas «Seguir leyendo»: solo hay uno; el nuevo sustituye al anterior
 app.get('/api/bookmark', wrap(async (req, res) => res.json(await store.getSetting('bookmark'))));

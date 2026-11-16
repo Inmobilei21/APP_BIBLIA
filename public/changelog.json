@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "4.6",
+      "date": "2026-11-16",
+      "changes": [
+        "Nuevo «Buscar» (en el menú y con la lupa de arriba): busca a la vez en el texto, tus comentarios, los temas y la discusión, sin importar mayúsculas ni tildes. Toca un resultado para ir directamente a él.",
+        "El PDF ya muestra bien las letras griegas (y hebreas): ahora usa una tipografía con esos alfabetos.",
+        "Se quita «Pedir un cambio a Claude» del menú."
+      ]
+    },
+    {
       "version": "4.5",
       "date": "2026-11-14",
       "changes": [

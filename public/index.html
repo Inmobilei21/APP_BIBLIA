@@ -23,6 +23,9 @@
       <span>Evangelio</span>
     </div>
     <div class="spacer"></div>
+    <button class="icon-btn" id="searchTopBtn" aria-label="Buscar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+    </button>
   </header>
 
   <div class="scrim" id="scrim" hidden></div>
@@ -77,9 +80,9 @@
       <div id="forumIndex" class="section-body" hidden></div>
     </section>
 
-    <button class="claude-link" id="claudeBtn">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
-      Pedir un cambio a Claude
+    <button class="claude-link" id="searchBtn">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+      Buscar
     </button>
     <button class="claude-link" id="backupBtn">
       <svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
@@ -159,29 +162,20 @@
     </div>
   </div>
 
-  <div class="modal-scrim" id="claudeModal" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="claudeTitle">
-      <div class="modal-head">
-        <h2 id="claudeTitle">Pedir un cambio a Claude</h2>
-        <button class="icon-btn" id="claudeClose" aria-label="Cerrar">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div id="claudePinBox" hidden>
-          <p class="editor-help">Escribe el PIN para poder pedir cambios. Este dispositivo lo recordará.</p>
-          <input id="claudePin" class="editor-name" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
-          <div class="form-row"><button class="btn primary" id="claudePinOk">Continuar</button></div>
+  <div class="modal-scrim search-scrim" id="searchModal" hidden>
+    <div class="modal modal-wide search-modal" role="dialog" aria-modal="true" aria-label="Buscar">
+      <div class="search-head">
+        <div class="search-field">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+          <input id="searchInput" type="search" inputmode="search" autocomplete="off" autocorrect="off" spellcheck="false"
+                 placeholder="Buscar en el texto, comentarios, temas…" aria-label="Buscar">
         </div>
-        <div id="claudeMain" hidden>
-          <p class="editor-help">Describe qué quieres cambiar o añadir en la app. En cuanto lo envías, Claude se pone a ello,
-            lo publica y te responde aquí (suele tardar unos minutos).</p>
-          <textarea id="claudeText" class="grow editor-text" placeholder="Por ejemplo: que el número de versículo sea más grande…"></textarea>
-          <div class="form-row"><button class="btn primary" id="claudeSend">Enviar a Claude</button></div>
-          <h3 class="claude-sub">Tus peticiones</h3>
-          <div id="claudeList" class="claude-list"></div>
-        </div>
+        <button class="search-cancel" id="searchClose">Cerrar</button>
       </div>
+      <div class="search-chips" id="searchChips" role="tablist">
+        <button data-f="all" class="on">Todo</button><button data-f="text">Texto</button><button data-f="comments">Comentarios</button><button data-f="topics">Temas</button><button data-f="posts">Discusión</button>
+      </div>
+      <div class="modal-body search-results" id="searchResults"></div>
     </div>
   </div>
 
