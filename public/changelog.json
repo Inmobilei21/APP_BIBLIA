@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "4.7",
+      "date": "2026-11-16",
+      "changes": [
+        "«Buscar» queda solo en la lupa de arriba; se quita del menú."
+      ]
+    },
+    {
       "version": "4.6",
       "date": "2026-11-16",
       "changes": [

@@ -1652,7 +1652,6 @@
     setTimeout(() => { inp.focus(); inp.select(); }, 50);
   }
   const closeSearch = () => { $('#searchModal').hidden = true; unlockScroll('search'); $('#searchInput').blur(); };
-  $('#searchBtn').addEventListener('click', openSearch);
   $('#searchTopBtn').addEventListener('click', openSearch);
   $('#searchClose').addEventListener('click', closeSearch);
   $('#searchInput').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 250); });
