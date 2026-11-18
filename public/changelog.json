@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "4.10",
+      "date": "2026-11-19",
+      "changes": [
+        "Después de pasar página (hacia delante o hacia atrás), la página se sigue desplazando con normalidad: ya no se queda bloqueada ni selecciona el versículo."
+      ]
+    },
+    {
       "version": "4.9",
       "date": "2026-11-18",
       "changes": [

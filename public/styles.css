@@ -528,8 +528,8 @@ body.flipping .scroll-btn { display: none; }
 /* ---------- v3.5: el encabezado no se mueve al pasar página ---------- */
 /* sin rebote al tirar de la página arriba o abajo del todo */
 html, body { overscroll-behavior-y: none; }
-/* mientras se pasa la hoja, la página no se desplaza */
-body.flipping { touch-action: none; }
+/* (v4.10) ya no se bloquea el táctil del cuerpo mientras se pasa la hoja: en el iPhone el bloqueo
+   podía quedarse puesto después de cambiar de capítulo y la página dejaba de desplazarse */
 
 /* ---------- v4.5: comentarios de subtítulos y divisiones en letra normal ---------- */
 /* El cuadro de escribir y los botones estaban dentro del subtítulo y heredaban su negrita
