@@ -576,3 +576,69 @@ body.flipping { touch-action: none; }
 .search-text mark { background: #f6e3a6; color: inherit; border-radius: 3px; padding: 0 1px; }
 .search-field { min-width: 0; }
 .search-cancel { flex-shrink: 0; }
+
+/* ---------- v4.8: modo noche ---------- */
+.theme-btn .sun { display: none; }
+html[data-theme="dark"] .theme-btn .sun { display: block; }
+html[data-theme="dark"] .theme-btn .moon { display: none; }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --gold: #c9a24a;
+  --gold-deep: #dcbb6c;
+  --gold-light: #6b5626;
+  --gold-pale: #2a2312;
+  --ink: #ece3cf;
+  --ink-soft: #a99c80;
+  --paper: #14110b;
+  --paper-warm: #1c1810;
+  --line: #3a3122;
+  --danger: #e07a68;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .55);
+}
+html[data-theme="dark"] .topbar { background: rgba(20, 17, 11, .94); }
+html[data-theme="dark"] .scroll-btn { background: rgba(28, 24, 16, .94); box-shadow: 0 4px 14px rgba(0, 0, 0, .5); }
+html[data-theme="dark"] .scrim { background: rgba(0, 0, 0, .55); }
+html[data-theme="dark"] .modal-scrim { background: rgba(0, 0, 0, .6); }
+/* superficies que eran blancas */
+html[data-theme="dark"] .drawer,
+html[data-theme="dark"] .modal,
+html[data-theme="dark"] .forum,
+html[data-theme="dark"] .filter,
+html[data-theme="dark"] .btn,
+html[data-theme="dark"] .nav-arrow,
+html[data-theme="dark"] .continue,
+html[data-theme="dark"] .chapter-grid button,
+html[data-theme="dark"] .ch-num,
+html[data-theme="dark"] .mention-menu,
+html[data-theme="dark"] .search-chips button,
+html[data-theme="dark"] .search-item,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] input[type="text"],
+html[data-theme="dark"] input[type="search"],
+html[data-theme="dark"] input[type="password"] { background-color: var(--paper-warm); color: var(--ink); }
+html[data-theme="dark"] .btn { color: var(--gold-deep); }
+html[data-theme="dark"] .btn.danger { color: var(--danger); border-color: #5a2a22; }
+html[data-theme="dark"] .btn.primary,
+html[data-theme="dark"] .chapter-grid button.current,
+html[data-theme="dark"] .ch-row.current .ch-num,
+html[data-theme="dark"] .search-chips button.on { background: var(--gold-grad); color: #1a1408; }
+html[data-theme="dark"] .search-chips button.on span { color: #1a1408; }
+html[data-theme="dark"] .badge { color: #1a1408; }
+html[data-theme="dark"] .brand-icon,
+html[data-theme="dark"] .drawer-logo { background: #000; }
+html[data-theme="dark"] .chapter-grid button.no-text,
+html[data-theme="dark"] .ch-row.no-text .ch-num,
+html[data-theme="dark"] .ch-row.no-text .ch-label,
+html[data-theme="dark"] .post-del { color: #6f6553; }
+html[data-theme="dark"] .search-text mark { background: #5c4718; color: #fff3d0; }
+html[data-theme="dark"] .toast,
+html[data-theme="dark"] .update-bar { background: #2a2312; border: 1px solid var(--line); }
+@keyframes flash-dark { 0%, 40% { background: #4a3a14; } }
+html[data-theme="dark"] .flash { animation-name: flash-dark; }
+/* pasar página: papel oscuro */
+html[data-theme="dark"] .leaf-back { background: linear-gradient(to right, #100d08, #17130c 30%, #1c1810); }
+html[data-theme="dark"] .leaf-cast { background: #000; }
+html[data-theme="dark"] .curl-paper { background: linear-gradient(135deg, rgba(30, 26, 18, .9), rgba(24, 20, 13, .93)); }
+html[data-theme="dark"] .curl-back-shade { background: linear-gradient(to bottom, rgba(0, 0, 0, .4), rgba(255, 240, 200, .06) 35%, rgba(0, 0, 0, .1) 70%, rgba(0, 0, 0, 0)); }
+html[data-theme="dark"] .curl-flap-wrap { filter: drop-shadow(0 0 10px rgba(0, 0, 0, .6)); }

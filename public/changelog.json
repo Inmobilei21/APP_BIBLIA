@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "4.8",
+      "date": "2026-11-18",
+      "changes": [
+        "Modo noche: botón con una luna arriba, junto a la lupa, para pasar a fondo oscuro (y con el sol, volver al claro). Se recuerda tu elección.",
+        "Mientras no lo toques, la app sigue el modo claro u oscuro del iPhone.",
+        "El PDF se sigue exportando en claro."
+      ]
+    },
+    {
       "version": "4.7",
       "date": "2026-11-16",
       "changes": [

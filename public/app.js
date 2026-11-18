@@ -1653,6 +1653,11 @@
   }
   const closeSearch = () => { $('#searchModal').hidden = true; unlockScroll('search'); $('#searchInput').blur(); };
   $('#searchTopBtn').addEventListener('click', openSearch);
+  $('#themeBtn').addEventListener('click', () => {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    window.setTheme(dark ? 'light' : 'dark');
+    toast(dark ? 'Modo día' : 'Modo noche');
+  });
   $('#searchClose').addEventListener('click', closeSearch);
   $('#searchInput').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 250); });
   $('#searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(searchTimer); runSearch(); e.target.blur(); } });
