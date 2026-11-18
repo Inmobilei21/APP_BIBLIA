@@ -642,3 +642,8 @@ html[data-theme="dark"] .leaf-cast { background: #000; }
 html[data-theme="dark"] .curl-paper { background: linear-gradient(135deg, rgba(30, 26, 18, .9), rgba(24, 20, 13, .93)); }
 html[data-theme="dark"] .curl-back-shade { background: linear-gradient(to bottom, rgba(0, 0, 0, .4), rgba(255, 240, 200, .06) 35%, rgba(0, 0, 0, .1) 70%, rgba(0, 0, 0, 0)); }
 html[data-theme="dark"] .curl-flap-wrap { filter: drop-shadow(0 0 10px rgba(0, 0, 0, .6)); }
+
+/* ---------- v4.9: desplazamiento fluido ---------- */
+/* El desplazamiento vertical lo hace siempre el navegador; los gestos horizontales (pasar página,
+   cerrar el menú) los recibe la app sin que la página se mueva de lado. */
+#reader, .drawer { touch-action: pan-y pinch-zoom; }

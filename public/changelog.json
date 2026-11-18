@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "4.9",
+      "date": "2026-11-18",
+      "changes": [
+        "Desplazamiento más fluido: al poner el dedo sobre un versículo para subir o bajar, la página se desplaza en vez de abrir el versículo.",
+        "Un versículo solo se abre con un toque, sin arrastrar."
+      ]
+    },
+    {
       "version": "4.8",
       "date": "2026-11-18",
       "changes": [

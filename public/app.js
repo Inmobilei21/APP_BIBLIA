@@ -589,13 +589,24 @@
     }
   }
 
+  // Un versículo solo se abre con un toque de verdad: si el dedo se movió o la página se desplazó, no
+  const tap = { x: 0, y: 0, sy: 0, moved: false };
+  document.addEventListener('touchstart', e => {
+    const t = e.touches[0]; tap.x = t.clientX; tap.y = t.clientY; tap.sy = window.scrollY; tap.moved = false;
+  }, { passive: true, capture: true });
+  document.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - tap.x) > 8 || Math.abs(t.clientY - tap.y) > 8) tap.moved = true;
+  }, { passive: true, capture: true });
+  const realTap = () => !tap.moved && Math.abs(window.scrollY - tap.sy) < 4;
+
   $('#verses').addEventListener('click', e => {
     if (e.target.closest('[data-act="add-text"]')) { openEditor(); return; }
     const mi = e.target.closest('.mention-item');
     if (mi) { gotoRef(mi.dataset.goto); return; }
     const el = e.target.closest('.block'); if (!el) return;
     const box = e.target.closest('.vactions');
-    if (!box) { state.active === el.id ? closeActions() : openActions(el.id); return; }
+    if (!box) { if (realTap()) state.active === el.id ? closeActions() : openActions(el.id); return; }
     const btn = e.target.closest('[data-act]'); if (!btn) return;
     const { v } = infoOf(el);
     const act = btn.dataset.act;
@@ -1034,7 +1045,7 @@
     }
 
     // Los movimientos se escuchan en el elemento tocado
-    let target = null;
+    let target = null, flipY = 0;
     const detach = () => {
       if (!target) return;
       target.removeEventListener('touchmove', move); target.removeEventListener('touchend', end); target.removeEventListener('touchcancel', end);
@@ -1048,16 +1059,14 @@
       mode = drawer.classList.contains('open') ? 'drawer' : 'chapter';
       w = mode === 'drawer' ? drawer.offsetWidth : window.innerWidth;
       target = e.target;
-      // no pasivo: así se puede impedir que el iPhone desplace la página mientras se pasa la hoja
-      target.addEventListener('touchmove', move, { passive: false });
+      // pasivo: el desplazamiento vertical lo hace el iPhone sin esperar a la app
+      // (los gestos horizontales no desplazan la página gracias a «touch-action: pan-y» en el CSS)
+      target.addEventListener('touchmove', move, { passive: true });
       target.addEventListener('touchend', end); target.addEventListener('touchcancel', end);
     }, { passive: true });
     function move(e) {
       if (dir === 'none') return;
       const tx = e.touches[0].clientX, x = tx - sx, y = e.touches[0].clientY - sy;
-      // gesto horizontal (o que lo parece desde el principio): la página no se desplaza ni rebota,
-      // así el encabezado no se mueve mientras se pasa la hoja
-      if (e.cancelable && (dir === 'h' || (!dir && Math.abs(x) > Math.abs(y)))) e.preventDefault();
       const now = performance.now();
       if (now > lastT) { vx = vx * 0.6 + ((tx - lastX) / (now - lastT)) * 0.4 / (w / 1000); lastX = tx; lastT = now; }
       if (!dir) {
@@ -1065,7 +1074,7 @@
         dir = Math.abs(x) > Math.abs(y) * 1.3 && (mode === 'chapter' || x < 0) ? 'h' : 'none';
         if (dir !== 'h') return;
         if (mode === 'drawer') drawer.style.transition = 'none';
-        else if (neighbour(x < 0 ? 1 : -1)) { busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
+        else if (neighbour(x < 0 ? 1 : -1)) { flipY = window.scrollY; busy = true; flip = 'starting'; startFlip(x < 0 ? 1 : -1).catch(() => { flip = null; busy = false; }); }
         else reader.style.transition = 'none';
       }
       dx = x; dy = y;
@@ -1105,6 +1114,7 @@
         window.scrollTo(0, 0);
       } else {
         await animateTo(0);
+        window.scrollTo(0, flipY);   // la página queda donde estaba aunque el dedo se moviera un poco en vertical
       }
       f.stage.remove(); flip = null; busy = false;
       document.body.classList.remove('flipping');
