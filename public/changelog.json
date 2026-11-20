@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "4.11",
+      "date": "2026-11-20",
+      "changes": [
+        "Al pulsar «Editar texto» (o escribir un comentario), el versículo sube justo debajo del encabezado y el cuadro queda encima del teclado, sin temblar.",
+        "Con el teclado abierto, el encabezado «Evangelio» se queda siempre visible arriba.",
+        "En el ordenador, un clic con el ratón vuelve a abrir el versículo aunque antes se haya desplazado la página."
+      ]
+    },
+    {
       "version": "4.10",
       "date": "2026-11-19",
       "changes": [

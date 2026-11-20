@@ -162,19 +162,30 @@
     document.body.classList.remove('editing');
     document.querySelectorAll('.block.writing').forEach(x => x.classList.remove('writing'));
   }
+  // Con el teclado abierto, el iPhone puede desplazar la zona visible por debajo del encabezado:
+  // el encabezado «Evangelio» se pega siempre a lo alto de lo que se ve.
+  function pinHeader() {
+    const vv = window.visualViewport, tb = $('.topbar');
+    const off = vv ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+    tb.style.transform = off > 1 ? `translateY(${off}px)` : '';
+  }
+  window.visualViewport?.addEventListener('resize', pinHeader);
+  window.visualViewport?.addEventListener('scroll', pinHeader);
   function editBelowVerse(ta) {
     stopEditing();
     const el = ta.closest('.block');
     const place = () => {
       if (!ta.isConnected || state.active !== el.id) { stopEditing(); return; }
+      pinHeader();
       const header = $('.topbar').offsetHeight, vis = visibleArea();
       const line = parseFloat(getComputedStyle(ta).lineHeight) || 26;
       const minBox = line * 4 + 24;
-      let delta = el.getBoundingClientRect().top - (Math.max(header, vis.top) + 8);
+      // el versículo justo debajo del encabezado, que está en lo alto de la zona visible
+      let delta = el.getBoundingClientRect().top - (vis.top + header + 8);
       const boxTop = ta.getBoundingClientRect().top - delta;
       const limit = vis.bottom - minBox - FORM_BUTTONS;
       if (boxTop > limit) delta += boxTop - limit;
-      window.scrollBy(0, delta);
+      if (Math.abs(delta) > 2) window.scrollBy(0, delta);
       const pad = parseFloat(getComputedStyle(ta).paddingTop) * 2 + 2;
       ta._cap = Math.max(line * 4 + pad, visibleArea().bottom - ta.getBoundingClientRect().top - FORM_BUTTONS);
       autosize(ta);
@@ -185,14 +196,17 @@
     ta.setSelectionRange(ta.value.length, ta.value.length);
     place();
     ta.scrollTop = ta.scrollHeight;   // cursor visible al final del texto
-    // El teclado del móvil tarda un momento en aparecer y mueve la página: se recoloca solo mientras aparece
-    // (el primer segundo y medio). Después se deja libre para que puedas arrastrar la página como quieras.
-    const timer = setTimeout(place, 350);
+    // El teclado tarda un momento en aparecer y el iPhone mueve la página mientras sube.
+    // No se recoloca a cada paso (eso hacía temblar el texto): se espera a que el teclado termine de subir
+    // y entonces se coloca una vez (y se repasa un instante después). Luego la página queda libre.
     const vv = window.visualViewport;
-    const onResize = () => place();
+    let settle = 0, recheck = 0;
+    const settleNow = () => { place(); clearTimeout(recheck); recheck = setTimeout(place, 80); };
+    const onResize = () => { clearTimeout(settle); settle = setTimeout(settleNow, 160); };
     vv?.addEventListener('resize', onResize);
-    const release = () => { clearTimeout(timer); vv?.removeEventListener('resize', onResize); };
-    const releaseTimer = setTimeout(release, 1500);
+    const timer = setTimeout(settleNow, 650);   // por si el teclado ya estaba abierto o no avisa
+    const release = () => { clearTimeout(timer); clearTimeout(settle); clearTimeout(recheck); vv?.removeEventListener('resize', onResize); };
+    const releaseTimer = setTimeout(release, 2500);
     const stop = () => { release(); clearTimeout(releaseTimer); ta.removeEventListener('blur', stop); };
     ta.addEventListener('blur', stop);
     stopPlacing = () => { stop(); ta._cap = null; };
@@ -590,15 +604,16 @@
   }
 
   // Un versículo solo se abre con un toque de verdad: si el dedo se movió o la página se desplazó, no
-  const tap = { x: 0, y: 0, sy: 0, moved: false };
+  const tap = { x: 0, y: 0, sy: 0, moved: false, at: 0 };
   document.addEventListener('touchstart', e => {
-    const t = e.touches[0]; tap.x = t.clientX; tap.y = t.clientY; tap.sy = window.scrollY; tap.moved = false;
+    const t = e.touches[0]; tap.x = t.clientX; tap.y = t.clientY; tap.sy = window.scrollY; tap.moved = false; tap.at = Date.now();
   }, { passive: true, capture: true });
   document.addEventListener('touchmove', e => {
     const t = e.touches[0];
     if (Math.abs(t.clientX - tap.x) > 8 || Math.abs(t.clientY - tap.y) > 8) tap.moved = true;
   }, { passive: true, capture: true });
-  const realTap = () => !tap.moved && Math.abs(window.scrollY - tap.sy) < 4;
+  // solo para clics que vienen de un toque reciente (con ratón o teclado, siempre vale)
+  const realTap = () => Date.now() - tap.at > 1500 || (!tap.moved && Math.abs(window.scrollY - tap.sy) < 4);
 
   $('#verses').addEventListener('click', e => {
     if (e.target.closest('[data-act="add-text"]')) { openEditor(); return; }
