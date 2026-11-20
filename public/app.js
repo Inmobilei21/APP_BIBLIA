@@ -174,7 +174,9 @@
   function editBelowVerse(ta) {
     stopEditing();
     const el = ta.closest('.block');
-    const place = () => {
+    // exact: colocar justo debajo del encabezado. Si no, solo se corrige cuando hace falta
+    // (versículo tapado por el encabezado o cuadro tapado por el teclado): así no da saltos de más.
+    const place = (exact) => {
       if (!ta.isConnected || state.active !== el.id) { stopEditing(); return; }
       pinHeader();
       const header = $('.topbar').offsetHeight, vis = visibleArea();
@@ -185,7 +187,9 @@
       const boxTop = ta.getBoundingClientRect().top - delta;
       const limit = vis.bottom - minBox - FORM_BUTTONS;
       if (boxTop > limit) delta += boxTop - limit;
-      if (Math.abs(delta) > 2) window.scrollBy(0, delta);
+      const ok = !exact && delta >= -2 && boxTop - delta <= limit + 2 &&
+        el.getBoundingClientRect().top <= vis.top + header + (vis.bottom - vis.top) * 0.35;
+      if (!ok && Math.abs(delta) > 2) window.scrollBy(0, delta);
       const pad = parseFloat(getComputedStyle(ta).paddingTop) * 2 + 2;
       ta._cap = Math.max(line * 4 + pad, visibleArea().bottom - ta.getBoundingClientRect().top - FORM_BUTTONS);
       autosize(ta);
@@ -194,18 +198,18 @@
     el.classList.add('writing');              // mientras se escribe, se ocultan las opciones y el comentario antiguo
     ta.focus({ preventScroll: true });
     ta.setSelectionRange(ta.value.length, ta.value.length);
-    place();
+    place(true);
     ta.scrollTop = ta.scrollHeight;   // cursor visible al final del texto
     // El teclado tarda un momento en aparecer y el iPhone mueve la página mientras sube.
     // No se recoloca a cada paso (eso hacía temblar el texto): se espera a que el teclado termine de subir
     // y entonces se coloca una vez (y se repasa un instante después). Luego la página queda libre.
     const vv = window.visualViewport;
-    let settle = 0, recheck = 0;
-    const settleNow = () => { place(); clearTimeout(recheck); recheck = setTimeout(place, 80); };
-    const onResize = () => { clearTimeout(settle); settle = setTimeout(settleNow, 160); };
+    let settle = 0;
+    const settleNow = () => { clearTimeout(timer); place(false); };
+    const onResize = () => { clearTimeout(timer); clearTimeout(settle); settle = setTimeout(settleNow, 200); };
     vv?.addEventListener('resize', onResize);
-    const timer = setTimeout(settleNow, 650);   // por si el teclado ya estaba abierto o no avisa
-    const release = () => { clearTimeout(timer); clearTimeout(settle); clearTimeout(recheck); vv?.removeEventListener('resize', onResize); };
+    const timer = setTimeout(settleNow, 800);   // por si el teclado ya estaba abierto o no avisa
+    const release = () => { clearTimeout(timer); clearTimeout(settle); vv?.removeEventListener('resize', onResize); };
     const releaseTimer = setTimeout(release, 2500);
     const stop = () => { release(); clearTimeout(releaseTimer); ta.removeEventListener('blur', stop); };
     ta.addEventListener('blur', stop);

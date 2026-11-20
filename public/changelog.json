@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "4.12",
+      "date": "2026-11-20",
+      "changes": [
+        "«Editar texto» ya no parpadea: el versículo se coloca de una vez y solo se corrige si el teclado lo tapa."
+      ]
+    },
+    {
       "version": "4.11",
       "date": "2026-11-20",
       "changes": [
