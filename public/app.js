@@ -492,7 +492,8 @@
       for (const c of list) await api('DELETE', `/api/comments/${c.id}`);
       const ids = new Set(list.map(c => c.id));
       state.comments = state.comments.filter(c => !ids.has(c.id));
-      indexComments(); refreshExtras(el); renderCommentIndex(); closeActions();
+      indexComments(); refreshExtras(el); renderCommentIndex();
+      openActions(el.id);   // sigue abierto, con las opciones de un párrafo sin comentario
       toast('Comentario eliminado');
     } catch (e) { toast('No se pudo eliminar: ' + e.message); }
   }

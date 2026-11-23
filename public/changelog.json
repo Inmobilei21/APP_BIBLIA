@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "4.13",
+      "date": "2026-11-23",
+      "changes": [
+        "Al eliminar un comentario, el párrafo se queda abierto, con sus opciones como si no tuviera comentario (por ejemplo, «Añadir comentario»)."
+      ]
+    },
+    {
       "version": "4.12",
       "date": "2026-11-20",
       "changes": [
