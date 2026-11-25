@@ -1297,15 +1297,31 @@
     pdf.setDrawColor(...GOLD); pdf.setLineWidth(2); pdf.line(W / 2, y - 7, W / 2, y + 7); pdf.line(W / 2 - 5, y - 2, W / 2 + 5, y - 2);
     y += 30;
     const commentsOf = (v, tg) => withComments ? (state.byRef.get(key(state.book, state.chapter, v, tg)) || []) : [];
+    // Comentarios: se respetan los saltos de línea y los párrafos como en la app.
+    // Los títulos de apartado («1. …», «[Nota …]») van en negrita y las viñetas («•», «-») con sangría.
     function comments(list) {
+      const LH = 14.5, X = M + 22, CWC = CW - 22;
+      const bar = () => { pdf.setDrawColor(...GOLD); pdf.setLineWidth(1.5); pdf.line(M + 12, y - 10.5, M + 12, y + 4); };
       for (const c of list) {
-        font('italic', 10); const lines = wrap(plain(c.text), CW - 22, CW - 22);
-        for (let i = 0; i < lines.length; i++) {
-          ensure(14); color(SOFT); pdf.text(lines[i], M + 22, y);
-          pdf.setDrawColor(...GOLD); pdf.setLineWidth(1.5); pdf.line(M + 12, y - 10, M + 12, y + 4);
-          y += 14;
+        const paras = plain(c.text).replace(/\r/g, '').split('\n');
+        let gap = false;
+        for (const raw of paras) {
+          const t = raw.trim();
+          if (!t) { gap = true; continue; }
+          if (gap) { y += 5; gap = false; }
+          const bullet = t.match(/^([•·\-–—*])\s+(.*)$/);
+          const heading = !bullet && t.length <= 90 && (/^\d+[.)]\s+\S/.test(t) || /^\[.*\]$/.test(t)) && !/[.;,]$/.test(t);
+          font(heading ? 'bold' : 'italic', heading ? 10.5 : 10.5);
+          const ind = bullet ? 12 : 0;
+          const lines = wrap(bullet ? bullet[2] : t, CWC - ind, CWC - ind);
+          for (let i = 0; i < lines.length; i++) {
+            ensure(LH); color(heading ? DEEP : SOFT);
+            if (bullet && i === 0) pdf.text('•', X, y);
+            pdf.text(lines[i], X + ind, y);
+            bar(); y += LH;
+          }
         }
-        y += 4;
+        y += 6;
       }
     }
     for (const x of withTargets(doc.blocks)) {

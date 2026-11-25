@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "4.15",
+      "date": "2026-11-25",
+      "changes": [
+        "PDF: los comentarios conservan sus saltos de línea y párrafos; los apartados numerados van en negrita y las viñetas con sangría, así los comentarios largos ya no salen en un solo bloque."
+      ]
+    },
+    {
       "version": "4.14",
       "date": "2026-11-25",
       "changes": [
