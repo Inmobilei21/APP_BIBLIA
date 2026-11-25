@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "4.14",
+      "date": "2026-11-25",
+      "changes": [
+        "El icono de «Marcar aquí» es hueco y del mismo color que los demás; solo se pone rojo cuando el versículo está marcado («Quitar marca»)."
+      ]
+    },
+    {
       "version": "4.13",
       "date": "2026-11-23",
       "changes": [

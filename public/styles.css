@@ -108,7 +108,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .continue .chev { transform: rotate(-45deg); }
 .vribbon { position: absolute; left: -14px; top: -1px; width: 14px; height: 32px; }
 .vribbon .ribbon-ico { width: 14px; height: 32px; display: block; }
-.act .ribbon-ico { fill: var(--ribbon); }
+.act .ribbon-ico { fill: none; stroke: currentColor !important; stroke-width: 2; stroke-linejoin: round; }   /* hueco, como los demás iconos */
+.act.marked .ribbon-ico { fill: var(--ribbon); stroke: none !important; }                                       /* marcado: rojo */
 
 .book-btn, .idx-book, .idx-ref {
   width: 100%; display: flex; align-items: center; gap: 8px; text-align: left;

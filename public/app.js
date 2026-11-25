@@ -427,7 +427,7 @@
         ${commentBtn}
         ${has ? `<button class="act act-danger" data-act="delete">${ICON.trash}Eliminar comentario</button>` : ''}
         ${tg ? '' : `
-        <button class="act" data-act="mark">${ICON.ribbon}${isMarked(v) ? 'Quitar marca' : 'Marcar aquí'}</button>
+        <button class="act${isMarked(v) ? ' marked' : ''}" data-act="mark">${ICON.ribbon}${isMarked(v) ? 'Quitar marca' : 'Marcar aquí'}</button>
         <button class="act" data-act="edit-text">${ICON.text}Editar texto</button>
         <button class="act" data-act="share">${ICON.share}Compartir</button>
         <button class="act" data-act="forum">${ICON.forum}Discusión${n ? ` <span class="act-count">${n}</span>` : ''}</button>`}
